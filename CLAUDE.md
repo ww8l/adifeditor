@@ -142,6 +142,22 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     is the only framework that runs here. Reversed from an earlier XCTest decision after
     the skeleton failed to build.
 
+11. **M1 includes sort, row selection, and delete rows** (pulled forward from M2). Real
+    logs accumulate multiple sessions — the owner's FT8CN fixture holds 66 QSOs across
+    nine dates — so trimming rows is part of prepping an activation log, not a later
+    nicety. §13's M1 is amended.
+
+12. **Don't infer intent from data. Give the operator manual control.** The output
+    filename date stays exactly as §10.2 says — earliest `QSO_DATE`, no inference, no
+    disambiguation prompt — because the user trims the rows first. More generally:
+    before building smart handling for a messy-data case, check whether a sort and a
+    delete already solve it. The only automatic data changes in the whole app are the
+    POTA `MY_SIG_INFO` fill and the output filenames. Everything else the user edits by
+    hand. (Same stance the spec already takes on lenient park-reference validation.)
+
+13. **File extensions are not authoritative.** FT8CN writes ADIF content to `.txt`. The
+    app judges by content and opens what it's given; fixtures keep their original names.
+
 ## Identity
 
 - Bundle identifier: `com.ww8l.adifeditor`
