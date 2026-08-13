@@ -18,6 +18,48 @@ Scripts/test.sh
 wire up the search paths for `Testing.framework`, so the framework needs pointing at
 explicitly. The script does that and is a no-op difference under a full Xcode install.
 
+## Where things stand
+
+*Last updated 2026-08-13.*
+
+**ADIFKit is done and the §11 gate is met.** 33 tests over 25 fixtures, all green:
+byte-identity on the 19 unedited well-formed files, parse-stability and writer
+idempotence on all 24 that open, a required warning on each of the 6 irregular ones,
+and invalid UTF-8 refused with a byte offset. The suite was mutation-checked, not just
+observed green — uppercasing field names on write fails 4 assertions, dropping
+empty-valued fields fails 13.
+
+Built so far:
+
+```
+Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser, ADIFWriter
+Tests/ADIFKitTests/ RoundTripTests (the §11 gate), ParserTests (semantics), Fixtures
+fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
+fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
+```
+
+**Next: the rest of M1** — `NSDocument` app, grid display, cell editing, header sort,
+save, row select/delete (decision 11), then POTA stamp and split. The app target does
+not exist yet and gets added to `Package.swift` when that work starts. Stop when M1
+works and let the owner use it before touching M2.
+
+Not yet built, deliberately: no app target, no `Info.plist`, no entitlements file, no
+bundle script, no CI workflow. §12's GitHub Actions pipeline is M4 work and would only
+sit there failing against an app target that doesn't exist.
+
+**Open items:**
+
+- **The repo is local only.** No remote, nothing pushed. `gh` is authenticated as
+  `ww8l`. The owner was asked whether to create `adif-editor` public or private and
+  hasn't decided; do not push without an answer. Public means the FT8CN fixture's real
+  callsigns go public, which §11 sanctions but is his call.
+- **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
+  hand, so the synthetic hostile cases are educated guesses at what those programs do
+  wrong. Adding real ones is the cheapest coverage available.
+- **DESIGN.md has not been amended.** The thirteen decisions below still live only in
+  this file, so the spec and the code disagree on paper. The owner was offered a fold-in
+  and hasn't said yes.
+
 ## Core principles (DESIGN.md §6) — invariants
 
 If an implementation decision conflicts with one of these, **the principle wins and
