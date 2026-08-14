@@ -420,6 +420,39 @@ struct EditingTests {
                 "the header the file arrived with survives its last QSO being deleted")
     }
 
+    // MARK: - Copied fragments (the clipboard format)
+
+    @Test("a headerless fragment of records survives a round trip")
+    func fragmentRoundTrips() throws {
+        // What Copy puts on the pasteboard: records with no header, since the fragment is
+        // part of a log rather than a log. Paste has to get back exactly what was copied,
+        // including field spellings and zero-length fields.
+        let document = try parse("""
+            <ADIF_VER:5>3.1.6
+            <EOH>
+            <call:5>W1ABC <comment:0> <mode:3>FT8 <EOR>
+            <call:5>K2XYZ <mode:3>FT8 <EOR>
+
+            """)
+
+        let fragment = ADIFDocument(header: nil, records: Array(document.records.prefix(2)))
+        let copied = String(decoding: ADIFWriter.write(fragment), as: UTF8.self)
+
+        #expect(!copied.uppercased().contains("<EOH>"), "a fragment carries no header")
+
+        let pasted = try parse(copied)
+        #expect(pasted.records == document.records)
+    }
+
+    @Test("pasting text that is not ADIF yields no records rather than failing")
+    func nonADIFPasteYieldsNothing() throws {
+        // The pasteboard belongs to the whole system and will hold prose and URLs. That
+        // is a disabled Paste, not a parse error (§6.4).
+        #expect(try parse("just some text someone copied").records.isEmpty)
+        #expect(try parse("https://pota.app/#/park/US-1234").records.isEmpty)
+        #expect(try parse("").records.isEmpty)
+    }
+
     // MARK: - Bounds
 
     @Test("editing a row that does not exist is refused, not fatal")

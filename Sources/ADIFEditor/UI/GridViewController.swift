@@ -4,22 +4,22 @@ import ADIFKit
 /// The spreadsheet view of a log: one row per QSO, one column per field name found
 /// anywhere in the file (§9).
 ///
-/// Cells are editable; sort and row deletion are still to come. Nothing here writes to
-/// disk — an edit changes the document in memory and marks it dirty, and the file is
-/// untouched until Save (§6.1).
+/// Cells are editable, headers sort, rows can be selected, cut, copied, pasted and
+/// deleted. Nothing here writes to disk — a change marks the document dirty and the file
+/// is untouched until Save (§6.1).
 final class GridViewController: NSViewController {
 
     /// Unowned rather than weak: the document owns the window controller that owns this,
     /// so it outlives the grid by construction, and an optional here would put a `?` on
     /// every cell lookup for a case that cannot happen.
-    private unowned let document: LogDocument
+    unowned let document: LogDocument
 
-    private let tableView = NSTableView()
+    let tableView = NSTableView()
 
     /// Cached at init rather than read from the document per cell: `columnNames` walks
     /// every field of every record to compute the union, and `tableView` asks for column
     /// content thousands of times while scrolling.
-    private let columns: [String]
+    private var columns: [String]
 
     /// Identifier of the leading row-number column. Contains a space so it can never
     /// collide with an ADIF field name, which cannot have one.
@@ -46,6 +46,8 @@ final class GridViewController: NSViewController {
     /// Undo has to repaint the grid just as an edit does, and routing both through the
     /// document's notification is what stops that from being two code paths.
     @objc private func recordsDidChange(_ notification: Notification) {
+        addAnyNewColumns()
+
         guard let row = notification.userInfo?[LogDocument.changedRowKey] as? Int,
               row < tableView.numberOfRows else {
             tableView.reloadData()
@@ -55,6 +57,31 @@ final class GridViewController: NSViewController {
             forRowIndexes: IndexSet(integer: row),
             columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns)
         )
+    }
+
+    /// Adds columns for field names the log has gained — pasted QSOs carrying a field
+    /// nothing else in the file had. Without this their values would be in the document
+    /// and saved to the file while being invisible in the grid.
+    ///
+    /// Only ever adds. A column whose every value has been deleted stays on screen for
+    /// the rest of the session: having a column vanish because the last QSO using it was
+    /// deleted would be a second surprise on top of the deletion, and the user may well
+    /// be about to type a value back into it.
+    private func addAnyNewColumns() {
+        let newNames = document.log.columnNames.filter { !columns.contains($0) }
+        guard !newNames.isEmpty else { return }
+
+        for name in newNames {
+            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
+            column.title = name
+            column.width = width(forColumnNamed: name)
+            column.minWidth = 40
+            column.resizingMask = .userResizingMask
+            column.sortDescriptorPrototype = NSSortDescriptor(key: name, ascending: true)
+            tableView.addTableColumn(column)
+        }
+
+        columns.append(contentsOf: newNames)
     }
 
     // MARK: - View
@@ -103,7 +130,7 @@ final class GridViewController: NSViewController {
 
     // MARK: - Context menu
 
-    private lazy var rowMenu: NSMenu = {
+    lazy var rowMenu: NSMenu = {
         let menu = NSMenu()
         menu.delegate = self
 
@@ -111,11 +138,24 @@ final class GridViewController: NSViewController {
         // Left on, AppKit's automatic validation would overrule that.
         menu.autoenablesItems = false
 
+        for (title, action) in [
+            ("Cut", #selector(cut(_:))),
+            ("Copy", #selector(copy(_:))),
+            ("Paste", #selector(paste(_:)))
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+
         let delete = NSMenuItem(title: "Delete",
                                 action: #selector(deleteClickedRows(_:)),
                                 keyEquivalent: "")
         delete.target = self
         menu.addItem(delete)
+
         return menu
     }()
 
@@ -123,7 +163,7 @@ final class GridViewController: NSViewController {
     ///
     /// Captured rather than read at click time because `clickedRow` is only meaningful
     /// during the click that opened the menu, and the action fires later.
-    private var contextRows = IndexSet()
+    private(set) var contextRows = IndexSet()
 
     @objc private func deleteClickedRows(_ sender: Any?) {
         guard !contextRows.isEmpty else { return }
@@ -226,11 +266,27 @@ extension GridViewController: NSMenuDelegate {
             tableView.selectRowIndexes(contextRows, byExtendingSelection: false)
         }
 
-        guard let item = menu.items.first else { return }
-        item.isEnabled = !contextRows.isEmpty
-        item.title = contextRows.count == 1
-            ? "Delete QSO"
-            : "Delete \(contextRows.count) QSOs"
+        let hasRows = !contextRows.isEmpty
+        let count = contextRows.count
+        let noun = count == 1 ? "QSO" : "\(count) QSOs"
+
+        for item in menu.items {
+            switch item.action {
+            case #selector(cut(_:)):
+                item.isEnabled = hasRows
+                item.title = hasRows ? "Cut \(noun)" : "Cut"
+            case #selector(copy(_:)):
+                item.isEnabled = hasRows
+                item.title = hasRows ? "Copy \(noun)" : "Copy"
+            case #selector(paste(_:)):
+                item.isEnabled = Self.pasteboardLooksLikeADIF
+            case #selector(deleteClickedRows(_:)):
+                item.isEnabled = hasRows
+                item.title = hasRows ? "Delete \(noun)" : "Delete"
+            default:
+                break
+            }
+        }
     }
 }
 
@@ -242,10 +298,14 @@ extension GridViewController: NSMenuItemValidation {
     /// nothing. `NSViewController` has no `validateMenuItem` of its own to override —
     /// the responder chain finds it through this protocol.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(delete(_:)) {
+        switch menuItem.action {
+        case #selector(delete(_:)), #selector(cut(_:)), #selector(copy(_:)):
             return !tableView.selectedRowIndexes.isEmpty
+        case #selector(paste(_:)):
+            return Self.pasteboardLooksLikeADIF
+        default:
+            return true
         }
-        return true
     }
 }
 

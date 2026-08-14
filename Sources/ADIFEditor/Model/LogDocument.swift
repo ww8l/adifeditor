@@ -141,6 +141,21 @@ final class LogDocument: NSDocument {
         replaceAllRecords(log.recordsByDeleting(at: indexes), actionName: name)
     }
 
+    /// Inserts QSOs at a row, and reports where they landed so the grid can select them.
+    ///
+    /// Additive (§6.3): pasted records join the log, they never overwrite the ones there.
+    @discardableResult
+    func insertRecords(_ incoming: [ADIFRecord], at index: Int, actionName: String) -> IndexSet {
+        guard !incoming.isEmpty else { return IndexSet() }
+
+        let position = min(max(index, 0), log.records.count)
+        var records = log.records
+        records.insert(contentsOf: incoming, at: position)
+
+        replaceAllRecords(records, actionName: actionName)
+        return IndexSet(integersIn: position..<(position + incoming.count))
+    }
+
     /// The undoable mutation for changes that move or remove whole records, as opposed to
     /// `replaceRecord`, which edits one in place.
     ///
