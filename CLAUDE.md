@@ -26,43 +26,48 @@ explicitly. The script does that and is a no-op difference under a full Xcode in
 
 ## Where things stand
 
-*Last updated 2026-08-13.*
+*Last updated 2026-08-14.*
 
-**ADIFKit is done and the §11 gate is met.** 33 tests over 25 fixtures, all green:
-byte-identity on the 19 unedited well-formed files, parse-stability and writer
-idempotence on all 24 that open, a required warning on each of the 6 irregular ones,
-and invalid UTF-8 refused with a byte offset. The suite was mutation-checked, not just
-observed green — uppercasing field names on write fails 4 assertions, dropping
-empty-valued fields fails 13.
-
-Built so far:
+**M1 is complete and the owner has used it.** 99 tests across three suites, all green and
+all mutation-checked rather than merely observed passing.
 
 ```
-Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser, ADIFWriter
+Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser,
+                   ADIFWriter, ADIFEditing (what an edit means), ADIFDuplicates
+Sources/POTAKit/   ParkReference, POTAStamp, POTAFilename
 Sources/ADIFEditor/ main, AppDelegate, MainMenu, Model/LogDocument,
-                   UI/LogWindowController, UI/GridViewController, UI/ParseWarningText
+                   UI/{LogWindowController, GridViewController, GridClipboard,
+                   POTACommands, DedupeCommand, ParseWarningText}
 Support/           Info.plist, ADIFEditor.entitlements
-Scripts/           test.sh (the suite), bundle.sh (builds ADIF Editor.app)
-Tests/ADIFKitTests/ RoundTripTests (the §11 gate), ParserTests (semantics), Fixtures
+Scripts/           test.sh (the suite), bundle.sh (builds and signs ADIF Editor.app)
+Tests/             ADIFKitTests (round trip, parser, editing, duplicates), POTAKitTests
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
 fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
 ```
 
-**The app opens and displays a log, read-only.** `Scripts/bundle.sh` builds, bundles and
-ad-hoc signs `.build/ADIF Editor.app`; it opens the FT8CN fixture and shows 66 QSOs in an
-`NSTableView`, one column per field name, with a titlebar banner when the parser
-recovered from something. Verified running against the real log, not just compiled.
+The app opens a log, edits cells, sorts on any header, selects/cuts/copies/pastes/deletes
+rows, stamps POTA references into new files, and finds duplicates. A titlebar banner
+reports anything the parser had to recover from. All of it verified running against the
+owner's real log, not just compiled.
 
-**Next, in order: cell editing, header sort, save, row select/delete** (decision 11),
-then POTA stamp and split. That completes M1 — stop there and let the owner use it
-before touching M2.
+**Nothing in the app ever writes to the file that was opened** except Save. The POTA
+commands write new files only (decision 15), autosave-in-place is off and must stay off,
+and every other change is an undoable in-memory edit.
 
-Each of the remaining pieces needs an undo story, which is why the grid is read-only
-now rather than half-editable: `NSDocument` supplies `NSUndoManager`, and every mutation
-has to register with it or Save silently disagrees with what is on screen.
+**Where the layers sit, and why.** ADIFKit owns the format *and* what an edit means to
+the data — clearing a cell removing a field, where a re-added field goes, sort order,
+duplicate matching. Those look like UI questions and are not: get them wrong and a saved
+file quietly differs from the one opened, so they live where §11's suite can reach them.
+The app layer is left with undo, dirty state, redisplay and panels, which §11 exempts
+from tests. Follow that split for anything new.
+
+**Beyond the spec:** dedupe (toolbar and Edit ▸ Find Duplicates) is not in DESIGN.md at
+all — the owner asked for it after using M1. Closest to §10.3's validation panel in
+spirit, but it deletes rather than advises, so it shows every row before removing any.
 
 Still not built, deliberately: no CI workflow (§12's GitHub Actions pipeline is M4), no
-app icon, no preferences.
+app icon, no preferences (so `MY_SIG` is reachable only by setting the `WriteMySigField`
+default by hand), no column filters or find/replace (M2/M3).
 
 **Open items:**
 
@@ -73,9 +78,11 @@ app icon, no preferences.
 - **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
-- **DESIGN.md has not been amended.** The thirteen decisions below still live only in
-  this file, so the spec and the code disagree on paper. The owner was offered a fold-in
-  and hasn't said yes.
+- **DESIGN.md has not been amended, and the gap is now wide.** The sixteen decisions
+  below live only in this file, and four of them (2, 14, 15, 16) contradict what §9 and
+  §10.2 say in plain words — a reader of DESIGN.md alone would build the wrong app. It
+  also does not mention dedupe. The owner has been offered a fold-in twice and hasn't
+  said yes.
 
 ## Core principles (DESIGN.md §6) — invariants
 
