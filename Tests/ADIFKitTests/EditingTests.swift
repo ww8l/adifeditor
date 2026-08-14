@@ -132,6 +132,66 @@ struct EditingTests {
                 "decision 3")
     }
 
+    @Test("a re-added field goes back where the other records keep it")
+    func reAddedFieldReturnsToItsPosition() throws {
+        var document = try parse("""
+            <CALL:5>W1ABC <GRIDSQUARE:4>EN53 <MODE:3>FT8 <EOR>
+            <CALL:5>K2XYZ <GRIDSQUARE:4>EM10 <MODE:3>FT8 <EOR>
+
+            """)
+
+        let cleared = try #require(document.recordBySettingValue("",
+                                                                 forColumn: "GRIDSQUARE",
+                                                                 inRecordAt: 0))
+        document.records[0] = cleared
+
+        let restored = try #require(document.recordBySettingValue("DM45",
+                                                                  forColumn: "GRIDSQUARE",
+                                                                  inRecordAt: 0))
+        document.records[0] = restored
+
+        #expect(restored.fields.map(\.name) == ["CALL", "GRIDSQUARE", "MODE"],
+                "not appended to the end of the record")
+        #expect(document.columnNames == ["CALL", "GRIDSQUARE", "MODE"],
+                "and so the column stays put in the grid")
+    }
+
+    @Test("clearing a cell and retyping the same value restores the exact bytes")
+    func clearAndRetypeIsByteIdentical() throws {
+        let source = """
+            <call:5>W1ABC <gridsquare:4>EN53 <mode:3>FT8 <eor>
+            <call:5>K2XYZ <gridsquare:4>EM10 <mode:3>FT8 <eor>
+
+            """
+        var document = try parse(source)
+
+        let cleared = try #require(document.recordBySettingValue("",
+                                                                 forColumn: "GRIDSQUARE",
+                                                                 inRecordAt: 0))
+        document.records[0] = cleared
+        #expect(text(document) != source)
+
+        let retyped = try #require(document.recordBySettingValue("EN53",
+                                                                 forColumn: "GRIDSQUARE",
+                                                                 inRecordAt: 0))
+        document.records[0] = retyped
+
+        // Position, spelling and separator all have to come back for this to hold.
+        #expect(text(document) == source)
+    }
+
+    @Test("a field no other record carries is added at the end")
+    func genuinelyNewFieldGoesLast() throws {
+        var document = try parse("<CALL:5>W1ABC <MODE:3>FT8 <EOR>\n")
+        let edited = try #require(document.recordBySettingValue("US-1234",
+                                                                forColumn: "MY_SIG_INFO",
+                                                                inRecordAt: 0))
+        document.records[0] = edited
+
+        #expect(edited.fields.map(\.name) == ["CALL", "MODE", "MY_SIG_INFO"],
+                "nothing to take a position from, so it goes at the end")
+    }
+
     @Test("an added field matches the record's own separator style")
     func addedFieldMatchesSeparators() throws {
         // No space between fields in this file; the added field must not introduce one.
@@ -142,6 +202,66 @@ struct EditingTests {
         document.records[0] = edited
 
         #expect(text(document) == "<CALL:5>W1ABC<BAND:3>20M<MY_SIG_INFO:7>US-1234<EOR>\n")
+    }
+
+    // MARK: - Column order (decision 14)
+
+    @Test("clearing a cell in the first row does not move its column")
+    func clearingDoesNotRelocateTheColumn() throws {
+        // The bug this pins, reported from the grid: delete row 1's QSL_RCVD and the
+        // whole column jumps to the far right, because under §9's original rule the
+        // field was no longer "first encountered" until row 2 — behind everything else
+        // row 1 carried.
+        var document = try parse("""
+            <CALL:5>W1ABC <QSL_RCVD:1>N <MODE:3>FT8 <EOR>
+            <CALL:5>K2XYZ <QSL_RCVD:1>Y <MODE:3>FT8 <EOR>
+
+            """)
+        let before = document.columnNames
+
+        let edited = try #require(document.recordBySettingValue("",
+                                                                forColumn: "QSL_RCVD",
+                                                                inRecordAt: 0))
+        document.records[0] = edited
+
+        #expect(document.columnNames == before)
+        #expect(document.columnNames == ["CALL", "QSL_RCVD", "MODE"])
+    }
+
+    @Test("a column survives every row losing its value")
+    func columnSurvivesBeingClearedEverywhere() throws {
+        var document = try parse("<CALL:5>W1ABC <QSL_RCVD:1>N <EOR>\n")
+        let edited = try #require(document.recordBySettingValue("",
+                                                                forColumn: "QSL_RCVD",
+                                                                inRecordAt: 0))
+        document.records[0] = edited
+
+        // No record carries it now, so it is genuinely gone from the data. The grid keeps
+        // showing the column for the rest of the session because it caches its columns —
+        // that is a view concern, not this one.
+        #expect(document.columnNames == ["CALL"])
+    }
+
+    @Test("a field only some records carry lands where those records put it")
+    func mergedColumnOrder() throws {
+        let document = try parse("""
+            <CALL:5>W1ABC <MODE:3>FT8 <EOR>
+            <CALL:5>K2XYZ <MY_SIG_INFO:7>US-1234 <MODE:3>FT8 <EOR>
+
+            """)
+        #expect(document.columnNames == ["CALL", "MY_SIG_INFO", "MODE"])
+    }
+
+    @Test("column order is stable when records disagree about field order")
+    func columnOrderStableUnderDisagreement() throws {
+        let document = try parse("""
+            <CALL:5>W1ABC <MODE:3>FT8 <BAND:3>20m <EOR>
+            <BAND:3>40m <CALL:5>K2XYZ <MODE:3>FT8 <EOR>
+            <MODE:2>CW <BAND:3>15m <CALL:5>W3GHI <EOR>
+
+            """)
+        #expect(document.columnNames == ["CALL", "MODE", "BAND"],
+                "later records reorder nothing; the first record's layout stands")
     }
 
     // MARK: - Undo

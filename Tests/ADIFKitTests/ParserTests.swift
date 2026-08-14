@@ -132,10 +132,14 @@ struct ParserTests {
 
     // MARK: - Columns
 
-    @Test("columns are the union of all fields, in first-encountered order")
+    @Test("columns are the union of all fields, merged into one order")
     func columnUnion() throws {
         let document = try parseFixture("sparse-fields.adi")
-        #expect(document.columnNames == ["CALL", "RST_SENT", "MODE", "GRIDSQUARE"])
+
+        // GRIDSQUARE appears only on the third record, between RST_SENT and MODE, and
+        // that is where it belongs in the grid — not tacked onto the end merely because
+        // the earlier records had no opinion about it (decision 14).
+        #expect(document.columnNames == ["CALL", "RST_SENT", "GRIDSQUARE", "MODE"])
         #expect(document.records[1]["RST_SENT"] == nil)
     }
 

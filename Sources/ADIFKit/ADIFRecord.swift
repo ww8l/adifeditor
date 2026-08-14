@@ -74,7 +74,28 @@ public struct ADIFRecord: Equatable, Sendable {
     /// A stamped FT8CN record has to read `... <my_gridsquare:4>DN70 <MY_SIG_INFO:7>US-1234 <eor>`,
     /// keeping the single space; without this, the new field would butt against `<eor>`.
     public mutating func appendField(named name: String, value: String) {
-        let separator = fields.last?.trailingText ?? ""
-        fields.append(ADIFField(spelling: name, value: value, trailingText: separator))
+        insertField(named: name, value: value, at: fields.count)
+    }
+
+    /// Inserts a field at a given position, matching the record's separator style.
+    ///
+    /// Position matters beyond tidiness. A field put back at the end of a record is the
+    /// last field of the first record that carries it, and the grid derives its column
+    /// order from exactly that — so a value retyped into a cleared cell would send its
+    /// whole column to the far right of the spreadsheet.
+    public mutating func insertField(named name: String, value: String, at index: Int) {
+        let position = min(max(index, 0), fields.count)
+
+        // The separator that trails a field is the text before the *next* one, so the
+        // style to copy belongs to the field this one is being placed after — or, when
+        // it goes first, to the field it displaces.
+        let separator = position > 0
+            ? fields[position - 1].trailingText
+            : fields.first?.trailingText ?? ""
+
+        fields.insert(
+            ADIFField(spelling: name, value: value, trailingText: separator),
+            at: position
+        )
     }
 }

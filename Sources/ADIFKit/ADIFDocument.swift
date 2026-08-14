@@ -32,19 +32,50 @@ public struct ADIFDocument: Equatable, Sendable {
         self.warnings = warnings
     }
 
-    /// The union of every field name present anywhere in the file, in the order first
-    /// encountered (§9). This is the grid's column set.
+    /// The union of every field name present anywhere in the file, ordered by merging
+    /// the records' own field orders (§9, as amended by decision 14). This is the grid's
+    /// column set.
     ///
     /// Returns normalized (uppercase) names — the column identity — not spellings,
     /// since one column may be spelled `call` on one record and `CALL` on the next.
+    ///
+    /// §9's original rule was "the order first encountered", walking records start to
+    /// finish and appending each new name. That makes the whole column layout hostage to
+    /// the first record: clear one cell in row 1 and its field is no longer encountered
+    /// until row 2, by which point every other field of row 1 is already in the list, so
+    /// the column jumps to the far right of the grid. Deleting a value is not supposed to
+    /// rearrange the spreadsheet.
+    ///
+    /// The rule instead is that a new field takes the place it holds in the first record
+    /// that carries it — immediately after whichever known field precedes it there.
+    /// Columns already placed are never moved, so the layout is stable no matter how much
+    /// the records disagree with each other about field order.
     public var columnNames: [String] {
-        var seen = Set<String>()
         var order: [String] = []
+        var positions: [String: Int] = [:]
+
         for record in records {
-            for field in record.fields where seen.insert(field.name).inserted {
-                order.append(field.name)
+            // Where in `order` this record's previous field sits. A field whose
+            // predecessor is unknown anchors at -1 and lands at the front, which is what
+            // a record that opens with a never-before-seen field should do.
+            var anchor = -1
+
+            for field in record.fields {
+                if let known = positions[field.name] {
+                    anchor = known
+                    continue
+                }
+
+                let insertionPoint = anchor + 1
+                order.insert(field.name, at: insertionPoint)
+                // Everything at or after the insertion point shifted right by one.
+                for index in insertionPoint..<order.count {
+                    positions[order[index]] = index
+                }
+                anchor = insertionPoint
             }
         }
+
         return order
     }
 

@@ -42,10 +42,35 @@ extension ADIFDocument {
             // spelling and its type indicator all survive the edit.
             record[column] = newValue
         } else {
-            record.appendField(named: spelling(forColumn: column), value: newValue)
+            record.insertField(named: spelling(forColumn: column),
+                               value: newValue,
+                               at: position(forColumn: column, in: record))
         }
 
         return record
+    }
+
+    /// Where a field being added back to a record belongs among its existing fields.
+    ///
+    /// Taken from the column order, which is itself merged from every record (see
+    /// `columnNames`): the field goes before the first field of this record that sits
+    /// after it in that order. So a `gridsquare` retyped into a cleared cell lands back
+    /// between `QSL_MANUAL` and `mode`, where the file's other records keep it, rather
+    /// than at the end of the record.
+    ///
+    /// Falls back to the end of the record when no other record carries the field, which
+    /// is the genuinely new column case — there is nothing to take a position from.
+    private func position(forColumn column: String, in record: ADIFRecord) -> Int {
+        let order = columnNames
+        var rank: [String: Int] = [:]
+        for (index, name) in order.enumerated() { rank[name] = index }
+
+        guard let target = rank[ADIFField.normalize(column)] else { return record.fields.count }
+
+        for (index, field) in record.fields.enumerated() {
+            if let position = rank[field.name], position > target { return index }
+        }
+        return record.fields.count
     }
 
     /// How this file spells a field name, taken from the first record that carries it.

@@ -217,6 +217,16 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
 13. **File extensions are not authoritative.** FT8CN writes ADIF content to `.txt`. The
     app judges by content and opens what it's given; fixtures keep their original names.
 
+14. **Column order is merged from every record, not taken from the first.** §9's "fields
+    in the order first encountered" makes the grid's whole layout hostage to record 1:
+    clear one cell there and that field is not encountered until record 2, behind
+    everything record 1 carries, so the column jumps to the far right. Found by the owner
+    within minutes of cell editing existing. The rule is now that a field takes the place
+    it holds in the first record that carries it — inserted after whichever known field
+    precedes it there — and columns already placed never move. Relatedly, a field added
+    back to a record is *inserted* where the other records keep it rather than appended,
+    since appending to record 1 relocates the column by the same mechanism. §9 is amended.
+
 ## Identity
 
 - Bundle identifier: `com.ww8l.adifeditor`
