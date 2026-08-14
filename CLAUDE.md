@@ -10,9 +10,15 @@ No Xcode on this machine — Command Line Tools only. That is a deliberate choic
 a gap to fix (see "Decisions taken" below).
 
 ```
-swift build
-Scripts/test.sh
+swift build                     compile
+Scripts/test.sh                 run the suite
+Scripts/bundle.sh               build .build/ADIF Editor.app and launch it from there
+Scripts/bundle.sh release       universal arm64 + x86_64, what ships
 ```
+
+`swift build` alone produces a bare executable, which is not a Mac app: the document
+types live in `Info.plist`, and Apple Silicon kills an unsigned arm64 binary outright
+rather than warning (§12). `Scripts/bundle.sh` assembles the bundle and ad-hoc signs it.
 
 `Scripts/test.sh` rather than plain `swift test`: without Xcode.app, SwiftPM doesn't
 wire up the search paths for `Testing.framework`, so the framework needs pointing at
@@ -33,19 +39,30 @@ Built so far:
 
 ```
 Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser, ADIFWriter
+Sources/ADIFEditor/ main, AppDelegate, MainMenu, Model/LogDocument,
+                   UI/LogWindowController, UI/GridViewController, UI/ParseWarningText
+Support/           Info.plist, ADIFEditor.entitlements
+Scripts/           test.sh (the suite), bundle.sh (builds ADIF Editor.app)
 Tests/ADIFKitTests/ RoundTripTests (the §11 gate), ParserTests (semantics), Fixtures
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
 fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
 ```
 
-**Next: the rest of M1** — `NSDocument` app, grid display, cell editing, header sort,
-save, row select/delete (decision 11), then POTA stamp and split. The app target does
-not exist yet and gets added to `Package.swift` when that work starts. Stop when M1
-works and let the owner use it before touching M2.
+**The app opens and displays a log, read-only.** `Scripts/bundle.sh` builds, bundles and
+ad-hoc signs `.build/ADIF Editor.app`; it opens the FT8CN fixture and shows 66 QSOs in an
+`NSTableView`, one column per field name, with a titlebar banner when the parser
+recovered from something. Verified running against the real log, not just compiled.
 
-Not yet built, deliberately: no app target, no `Info.plist`, no entitlements file, no
-bundle script, no CI workflow. §12's GitHub Actions pipeline is M4 work and would only
-sit there failing against an app target that doesn't exist.
+**Next, in order: cell editing, header sort, save, row select/delete** (decision 11),
+then POTA stamp and split. That completes M1 — stop there and let the owner use it
+before touching M2.
+
+Each of the remaining pieces needs an undo story, which is why the grid is read-only
+now rather than half-editable: `NSDocument` supplies `NSUndoManager`, and every mutation
+has to register with it or Save silently disagrees with what is on screen.
+
+Still not built, deliberately: no CI workflow (§12's GitHub Actions pipeline is M4), no
+app icon, no preferences.
 
 **Open items:**
 

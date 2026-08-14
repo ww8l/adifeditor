@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>ADIF Editor</string>
+	<key>CFBundleDisplayName</key>
+	<string>ADIF Editor</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.ww8l.adifeditor</string>
+	<key>CFBundleExecutable</key>
+	<string>ADIFEditor</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Tim Annable. MIT licensed.</string>
+
+	<!-- No NSAppTransportSecurity key, no URL schemes, no services: the app makes no
+	     network connections of any kind (§6.5), so it has nothing to configure. -->
+
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>ADIF Log</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.ww8l.adifeditor.adi</string>
+			</array>
+			<key>NSDocumentClass</key>
+			<string>LogDocument</string>
+		</dict>
+
+		<!-- FT8CN writes ADIF content to .txt (decision 13), so text files must be
+		     openable. Ranked Alternate, never Owner: opening one when asked is right,
+		     becoming the Mac's default text editor is not. -->
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Text File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>NSDocumentClass</key>
+			<string>LogDocument</string>
+		</dict>
+
+		<!-- The catch-all that makes "judge by content, open what you're given" true for
+		     a log named anything at all. Rank None keeps it out of Finder's Open With
+		     menu for every file on the disk; it exists only so the open panel can map
+		     an unrecognized file to a document class. -->
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>NSDocumentClass</key>
+			<string>LogDocument</string>
+		</dict>
+	</array>
+
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.ww8l.adifeditor.adi</string>
+			<key>UTTypeDescription</key>
+			<string>ADIF Log</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>adi</string>
+					<string>adif</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

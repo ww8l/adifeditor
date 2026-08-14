@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+	Two entitlements, and the list is meant to stay this short.
+
+	§6.5 is "no network", not "no network by default": there must be no
+	com.apple.security.network.client and no com.apple.security.network.server key
+	here, ever. Their absence under the sandbox is what makes the guarantee
+	enforceable by the OS rather than a promise in a document.
+
+	user-selected.read-write is the sandbox's file access: the user picks a file in
+	the open panel, and that grant covers it. Writing the split's output files (§10.2)
+	is covered by the destination folder the user chooses.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
