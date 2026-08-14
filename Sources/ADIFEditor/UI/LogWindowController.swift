@@ -122,16 +122,17 @@ final class LogWindowController: NSWindowController {
 
 extension NSToolbarItem.Identifier {
     static let pota = NSToolbarItem.Identifier("POTA")
+    static let dedupe = NSToolbarItem.Identifier("Dedupe")
 }
 
 extension LogWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.pota, .flexibleSpace]
+        [.pota, .dedupe, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.pota, .flexibleSpace, .space]
+        [.pota, .dedupe, .flexibleSpace, .space]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -145,6 +146,12 @@ extension LogWindowController: NSToolbarDelegate {
                                tooltip: "Write a log stamped with a park reference, "
                                       + "or one file per park for an n-fer",
                                action: #selector(stampForPOTA(_:)))
+        case .dedupe:
+            return toolbarItem(identifier,
+                               label: "Dedupe",
+                               symbol: "line.3.horizontal.decrease.circle",
+                               tooltip: "Find QSOs that repeat, and delete the repeats",
+                               action: #selector(findDuplicates(_:)))
         default:
             return nil
         }

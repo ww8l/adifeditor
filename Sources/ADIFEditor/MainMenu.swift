@@ -68,7 +68,9 @@ enum MainMenu {
             // so backspace would stop deleting characters while editing a cell. The bare
             // Delete key still deletes rows — the grid handles it as a key press, which
             // only happens when the table itself has focus.
-            item("Delete", #selector(GridViewController.delete(_:)), "\u{8}")
+            item("Delete", #selector(GridViewController.delete(_:)), "\u{8}"),
+            .separator(),
+            item("Find Duplicates…", #selector(LogWindowController.findDuplicates(_:)), "d")
         ]
     }
 
