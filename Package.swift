@@ -16,6 +16,7 @@ let package = Package(
     products: [
         .library(name: "ADIFKit", targets: ["ADIFKit"]),
         .library(name: "POTAKit", targets: ["POTAKit"]),
+        .library(name: "QRZKit", targets: ["QRZKit"]),
         .executable(name: "ADIFEditor", targets: ["ADIFEditor"])
     ],
     targets: [
@@ -28,13 +29,24 @@ let package = Package(
             name: "POTAKit",
             dependencies: ["ADIFKit"]
         ),
+        // The only target permitted to open a socket (§6.5, as amended 2026-08-14).
+        // Everything in it above `QRZTransport` is reachable in tests with no network,
+        // and the suite must never make a real request.
+        .target(
+            name: "QRZKit",
+            dependencies: ["ADIFKit"]
+        ),
         .executableTarget(
             name: "ADIFEditor",
-            dependencies: ["ADIFKit", "POTAKit"]
+            dependencies: ["ADIFKit", "POTAKit", "QRZKit"]
         ),
         .testTarget(
             name: "POTAKitTests",
             dependencies: ["POTAKit", "ADIFKit"]
+        ),
+        .testTarget(
+            name: "QRZKitTests",
+            dependencies: ["QRZKit", "ADIFKit"]
         ),
         .testTarget(
             name: "ADIFKitTests",

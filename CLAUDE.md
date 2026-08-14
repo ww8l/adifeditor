@@ -125,19 +125,35 @@ malformed file produces a clear diagnostic naming the problem and the byte or li
 offset. It does not produce a stack trace, and it does not produce a silently mangled
 log.
 
-**6.5 — No network.** Not "no network by default." No network. The sandbox
-entitlements must not include any network client or server capability.
+**6.5 — One network destination, chosen by the user, or none.** *(Amended 2026-08-14,
+owner's ruling. Weakens the principle — the only amendment so far that does. Was: "No
+network. Not 'no network by default.' No network.")*
+
+One outbound connection is permitted: a QRZ callsign lookup, on a subscription the user
+pays for, with credentials the user enters (§10.4). In its place:
+
+- **No server entitlement**, ever. `com.apple.security.network.client` is the whole of
+  the concession.
+- **Offline is the resting state.** No credentials means no connections. Every feature
+  but the lookup works with the network off, with nothing blocking or retrying.
+- **No log data leaves the machine.** One callsign goes out. Not QSOs, not files.
+- **No connection the user did not ask for.** No telemetry, update check, prefetch, or
+  background refresh.
+- **Credentials in the Keychain only** — never a plist, never the repo, never a log.
+
+What made this rule strong was that the OS enforced it. That is gone and cannot come
+back while the client entitlement is present; this list and §11's tests are what remain.
 
 ## Non-goals (DESIGN.md §3) — do not build, do not leave hooks for
 
 - **Any format other than ADI.** No ADX, Cabrillo, TR, CT, eQSL, CSV, or JSON import
   or export. One format in, one format out.
 - **Logging.** This is not a logger. It edits files produced by loggers. No radio
-  control, no callsign lookup, no clock, no QSO entry form, no persistent logbook.
-- **Uploading.** No network access whatsoever. The user uploads to POTA themselves.
-- **Telemetry, analytics, crash reporting, update checks.** The app makes no network
-  connections of any kind. It should be possible to run it with the network off and
-  notice nothing.
+  control, no clock, no QSO entry form, no persistent logbook. Callsign lookup is the
+  one exception (§10.4, added 2026-08-14).
+- **Uploading.** The app never transmits log data. The user uploads to POTA themselves.
+- **Telemetry, analytics, crash reporting, update checks.** The app phones home for
+  nothing. The only traffic it ever originates is a lookup the user invoked by name.
 - **SOTA, WWFF, IOTA, or contest-specific features.** POTA only, for now.
 
 Also out of scope by §4: nothing may be derived from ADIF Master's binary, source,
@@ -247,6 +263,18 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     button is labelled "POTA". The park count already says which operation was meant, so
     it is not a choice worth putting in front of the operator. §10.2's "two commands" is
     amended to one.
+
+17. **QRZ lookup, and §6.5 struck.** *(2026-08-14, separate from the sixteen above —
+    those were approved together.)* The owner asked for a QRZ XML lookup to fill station
+    details he would otherwise type by hand. Granted; §6.5 amended above and §10.4 added
+    to DESIGN.md. Unlike every other decision here, this one *removes* a guarantee
+    rather than sharpening one: the network entitlement means the OS no longer enforces
+    anything about connections, and that protection cannot be recovered while the
+    entitlement is present. It was raised as a one-way door and the owner ruled with
+    that in front of him. The conditions in §6.5's replacement list are not negotiable
+    individually — collectively they are what was traded for it. Anything wanting a
+    *second* network destination is a new decision needing the same conversation, not an
+    extension of this one.
 
 ## Identity
 
