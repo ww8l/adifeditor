@@ -97,6 +97,38 @@ final class GridViewController: NSViewController {
         // change the order fields are written in, and nothing does that yet. Letting
         // columns be dragged now would promise something the writer does not honor.
         tableView.allowsColumnReordering = false
+
+        tableView.menu = rowMenu
+    }
+
+    // MARK: - Context menu
+
+    private lazy var rowMenu: NSMenu = {
+        let menu = NSMenu()
+        menu.delegate = self
+
+        // Enablement is decided in `menuNeedsUpdate`, where the target rows are known.
+        // Left on, AppKit's automatic validation would overrule that.
+        menu.autoenablesItems = false
+
+        let delete = NSMenuItem(title: "Delete",
+                                action: #selector(deleteClickedRows(_:)),
+                                keyEquivalent: "")
+        delete.target = self
+        menu.addItem(delete)
+        return menu
+    }()
+
+    /// The rows the context menu will act on, captured while the menu is being built.
+    ///
+    /// Captured rather than read at click time because `clickedRow` is only meaningful
+    /// during the click that opened the menu, and the action fires later.
+    private var contextRows = IndexSet()
+
+    @objc private func deleteClickedRows(_ sender: Any?) {
+        guard !contextRows.isEmpty else { return }
+        document.deleteRecords(at: contextRows)
+        tableView.deselectAll(nil)
     }
 
     // MARK: - Columns
@@ -170,6 +202,35 @@ extension GridViewController: NSTableViewDataSource {
               let column = descriptor.key else { return }
 
         document.sortRecords(byColumn: column, ascending: descriptor.ascending)
+    }
+}
+
+// MARK: - Context menu
+
+extension GridViewController: NSMenuDelegate {
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let clicked = tableView.clickedRow
+        let selection = tableView.selectedRowIndexes
+
+        if clicked < 0 {
+            // Right-click below the last row: nothing was aimed at, so fall back to
+            // whatever is selected.
+            contextRows = selection
+        } else if selection.contains(clicked) {
+            contextRows = selection
+        } else {
+            // Right-clicking outside the selection targets that row alone, and takes the
+            // selection with it so the highlight matches what Delete is about to remove.
+            contextRows = IndexSet(integer: clicked)
+            tableView.selectRowIndexes(contextRows, byExtendingSelection: false)
+        }
+
+        guard let item = menu.items.first else { return }
+        item.isEnabled = !contextRows.isEmpty
+        item.title = contextRows.count == 1
+            ? "Delete QSO"
+            : "Delete \(contextRows.count) QSOs"
     }
 }
 
