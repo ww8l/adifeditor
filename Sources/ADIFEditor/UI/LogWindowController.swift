@@ -40,6 +40,8 @@ final class LogWindowController: NSWindowController {
         self.hasSavedFrame = restoredSavedFrame
         super.init(window: window)
 
+        installToolbar()
+
         if !document.warnings.isEmpty {
             addWarningBanner(text: ParseWarningText.summary(document.warnings))
         }
@@ -66,6 +68,18 @@ final class LogWindowController: NSWindowController {
         }
 
         super.showWindow(sender)
+    }
+
+    // MARK: - Toolbar
+
+    /// §10.2 asks for both POTA commands on a visible toolbar button as well as in a
+    /// menu, since they are the reason the app exists.
+    private func installToolbar() {
+        let toolbar = NSToolbar(identifier: "LogToolbar")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = true
+        window?.toolbar = toolbar
     }
 
     /// The file opened, so this is advisory rather than an alert to dismiss (§6.4). A
@@ -101,5 +115,60 @@ final class LogWindowController: NSWindowController {
         accessory.view = banner
         accessory.layoutAttribute = .bottom
         window?.addTitlebarAccessoryViewController(accessory)
+    }
+}
+
+// MARK: - Toolbar
+
+extension NSToolbarItem.Identifier {
+    static let potaStamp = NSToolbarItem.Identifier("POTAStamp")
+    static let potaSplit = NSToolbarItem.Identifier("POTASplit")
+}
+
+extension LogWindowController: NSToolbarDelegate {
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.potaStamp, .potaSplit, .flexibleSpace]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.potaStamp, .potaSplit, .flexibleSpace, .space]
+    }
+
+    func toolbar(_ toolbar: NSToolbar,
+                 itemForItemIdentifier identifier: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        switch identifier {
+        case .potaStamp:
+            return toolbarItem(identifier,
+                               label: "Stamp",
+                               symbol: "mappin.and.ellipse",
+                               tooltip: "Fill MY_SIG_INFO with a park reference",
+                               action: #selector(stampForPOTA(_:)))
+        case .potaSplit:
+            return toolbarItem(identifier,
+                               label: "Split",
+                               symbol: "square.on.square",
+                               tooltip: "Write one file per park, each holding every QSO",
+                               action: #selector(splitForPOTA(_:)))
+        default:
+            return nil
+        }
+    }
+
+    private func toolbarItem(_ identifier: NSToolbarItem.Identifier,
+                             label: String,
+                             symbol: String,
+                             tooltip: String,
+                             action: Selector) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = label
+        item.paletteLabel = label
+        item.toolTip = tooltip
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        item.target = self
+        item.action = action
+        item.isBordered = true
+        return item
     }
 }

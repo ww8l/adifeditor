@@ -1,5 +1,6 @@
 import AppKit
 import ADIFKit
+import POTAKit
 
 /// One open ADIF file.
 ///
@@ -139,6 +140,18 @@ final class LogDocument: NSDocument {
 
         let name = indexes.count == 1 ? "Delete QSO" : "Delete \(indexes.count) QSOs"
         replaceAllRecords(log.recordsByDeleting(at: indexes), actionName: name)
+    }
+
+    /// Fills the park reference into every QSO that has not got one, in memory.
+    ///
+    /// Undoable and dirty-marking like every other edit; the file is untouched until Save.
+    @discardableResult
+    func stampPOTA(with park: ParkReference, alsoWriteProgramField writeProgram: Bool) -> POTAStamp.Outcome {
+        let outcome = POTAStamp.stamp(log,
+                                      with: park,
+                                      alsoWriteProgramField: writeProgram)
+        replaceAllRecords(outcome.document.records, actionName: "Stamp \(park.text)")
+        return outcome
     }
 
     /// Inserts QSOs at a row, and reports where they landed so the grid can select them.

@@ -15,15 +15,26 @@ let package = Package(
     ],
     products: [
         .library(name: "ADIFKit", targets: ["ADIFKit"]),
+        .library(name: "POTAKit", targets: ["POTAKit"]),
         .executable(name: "ADIFEditor", targets: ["ADIFEditor"])
     ],
     targets: [
         .target(
             name: "ADIFKit"
         ),
+        // POTA is its own layer (§7), not part of ADIFKit: the format knows nothing
+        // about parks, and a park reference is not an ADIF concept.
+        .target(
+            name: "POTAKit",
+            dependencies: ["ADIFKit"]
+        ),
         .executableTarget(
             name: "ADIFEditor",
-            dependencies: ["ADIFKit"]
+            dependencies: ["ADIFKit", "POTAKit"]
+        ),
+        .testTarget(
+            name: "POTAKitTests",
+            dependencies: ["POTAKit", "ADIFKit"]
         ),
         .testTarget(
             name: "ADIFKitTests",

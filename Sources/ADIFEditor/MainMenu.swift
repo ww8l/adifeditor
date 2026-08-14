@@ -12,6 +12,7 @@ enum MainMenu {
         main.addItem(submenu(named: "ADIF Editor", items: appMenu()))
         main.addItem(submenu(named: "File", items: fileMenu()))
         main.addItem(submenu(named: "Edit", items: editMenu()))
+        main.addItem(submenu(named: "POTA", items: potaMenu()))
         main.addItem(submenu(named: "Window", items: windowMenu()))
         return main
     }
@@ -68,6 +69,14 @@ enum MainMenu {
             // Delete key still deletes rows — the grid handles it as a key press, which
             // only happens when the table itself has focus.
             item("Delete", #selector(GridViewController.delete(_:)), "\u{8}")
+        ]
+    }
+
+    /// §10.2's two commands, in a menu of their own as well as on the toolbar.
+    private static func potaMenu() -> [NSMenuItem] {
+        [
+            item("Stamp Park Reference…", #selector(LogWindowController.stampForPOTA(_:)), "p"),
+            item("Split by Park…", #selector(LogWindowController.splitForPOTA(_:)), "P")
         ]
     }
 
