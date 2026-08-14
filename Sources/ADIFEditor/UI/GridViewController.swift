@@ -4,24 +4,57 @@ import ADIFKit
 /// The spreadsheet view of a log: one row per QSO, one column per field name found
 /// anywhere in the file (§9).
 ///
-/// Read-only for now. Cell editing, sort, and row deletion are the next pieces of M1,
-/// and each of them needs an undo story that this checkpoint deliberately does not have.
+/// Cells are editable; sort and row deletion are still to come. Nothing here writes to
+/// disk — an edit changes the document in memory and marks it dirty, and the file is
+/// untouched until Save (§6.1).
 final class GridViewController: NSViewController {
 
-    private let log: ADIFDocument
+    /// Unowned rather than weak: the document owns the window controller that owns this,
+    /// so it outlives the grid by construction, and an optional here would put a `?` on
+    /// every cell lookup for a case that cannot happen.
+    private unowned let document: LogDocument
+
     private let tableView = NSTableView()
 
-    /// Identifier of the leading row-number column. Prefixed so it can never collide
-    /// with an ADIF field name, which cannot contain a space.
+    /// Cached at init rather than read from the document per cell: `columnNames` walks
+    /// every field of every record to compute the union, and `tableView` asks for column
+    /// content thousands of times while scrolling.
+    private let columns: [String]
+
+    /// Identifier of the leading row-number column. Contains a space so it can never
+    /// collide with an ADIF field name, which cannot have one.
     private static let rowNumberColumn = NSUserInterfaceItemIdentifier("row number")
 
-    init(log: ADIFDocument) {
-        self.log = log
+    init(document: LogDocument) {
+        self.document = document
+        self.columns = document.log.columnNames
         super.init(nibName: nil, bundle: nil)
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(recordsDidChange(_:)),
+            name: LogDocument.recordsDidChange,
+            object: document
+        )
     }
 
     required init?(coder: NSCoder) {
         fatalError("not loaded from a nib")
+    }
+
+    /// Redraws a row the document says has changed — an edit, or an undo of one.
+    /// Undo has to repaint the grid just as an edit does, and routing both through the
+    /// document's notification is what stops that from being two code paths.
+    @objc private func recordsDidChange(_ notification: Notification) {
+        guard let row = notification.userInfo?[LogDocument.changedRowKey] as? Int,
+              row < tableView.numberOfRows else {
+            tableView.reloadData()
+            return
+        }
+        tableView.reloadData(
+            forRowIndexes: IndexSet(integer: row),
+            columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns)
+        )
     }
 
     // MARK: - View
@@ -71,11 +104,11 @@ final class GridViewController: NSViewController {
     private func buildColumns() {
         let rowNumbers = NSTableColumn(identifier: Self.rowNumberColumn)
         rowNumbers.title = "#"
-        rowNumbers.width = width(forRowNumbersUpTo: log.records.count)
+        rowNumbers.width = width(forRowNumbersUpTo: document.log.records.count)
         rowNumbers.resizingMask = .userResizingMask
         tableView.addTableColumn(rowNumbers)
 
-        for name in log.columnNames {
+        for name in columns {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
             column.title = name
             column.width = width(forColumnNamed: name)
@@ -90,7 +123,7 @@ final class GridViewController: NSViewController {
     /// and column widths are a starting point the user can drag anyway.
     private func width(forColumnNamed name: String) -> CGFloat {
         var widest = measure(name, font: Self.headerFont)
-        for record in log.records.prefix(200) {
+        for record in document.log.records.prefix(200) {
             guard let value = record[name], !value.isEmpty else { continue }
             widest = max(widest, measure(value, font: Self.cellFont))
         }
@@ -120,7 +153,7 @@ final class GridViewController: NSViewController {
 extension GridViewController: NSTableViewDataSource {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        log.records.count
+        document.log.records.count
     }
 }
 
@@ -142,16 +175,38 @@ extension GridViewController: NSTableViewDelegate {
             cell.textField?.stringValue = String(row + 1)
             cell.textField?.alignment = .right
             cell.textField?.textColor = .secondaryLabelColor
+            cell.textField?.isEditable = false
         } else {
             // An absent field and a present-but-empty one are both an empty cell here.
             // The distinction is real and the writer depends on it (decision 2), but it
             // is not something the grid can usefully show.
-            cell.textField?.stringValue = log.records[row][tableColumn.identifier.rawValue] ?? ""
+            cell.textField?.stringValue =
+                document.log.records[row][tableColumn.identifier.rawValue] ?? ""
             cell.textField?.alignment = .left
             cell.textField?.textColor = .labelColor
+            cell.textField?.isEditable = true
         }
 
         return cell
+    }
+
+    /// Commits an edit. Fires when the user presses Return or clicks away, which is
+    /// AppKit's own definition of the edit being finished.
+    ///
+    /// The row and column are read back from the view rather than captured when the cell
+    /// was built: cells are reused as the table scrolls, so a captured index goes stale
+    /// the moment a row leaves the screen.
+    @objc private func cellDidCommit(_ sender: NSTextField) {
+        let row = tableView.row(for: sender)
+        let column = tableView.column(for: sender)
+        guard row >= 0, column >= 0 else { return }
+
+        let identifier = tableView.tableColumns[column].identifier
+        guard identifier != Self.rowNumberColumn else { return }
+
+        document.setValue(sender.stringValue,
+                          forColumn: identifier.rawValue,
+                          inRecordAt: row)
     }
 
     private func reusableCell(for identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
@@ -160,9 +215,16 @@ extension GridViewController: NSTableViewDelegate {
             return existing
         }
 
-        let text = NSTextField(labelWithString: "")
+        let text = NSTextField()
         text.font = Self.cellFont
         text.lineBreakMode = .byTruncatingTail
+        text.isBordered = false
+        text.drawsBackground = false
+        text.focusRingType = .none
+        text.usesSingleLineMode = true
+        text.cell?.sendsActionOnEndEditing = true
+        text.target = self
+        text.action = #selector(cellDidCommit(_:))
         text.translatesAutoresizingMaskIntoConstraints = false
 
         let cell = NSTableCellView()

@@ -29,7 +29,7 @@ final class LogWindowController: NSWindowController {
         // deliberately (see `GridViewController.loadView`) — a scroll view has none of
         // its own, and a window with a zero-sized content view clamps itself to
         // `minSize` in a screen corner.
-        window.contentViewController = GridViewController(log: document.log)
+        window.contentViewController = GridViewController(document: document)
 
         // Order matters: `setFrameUsingName` restores a size the user chose earlier and
         // reports whether it found one, while `setFrameAutosaveName` both registers the

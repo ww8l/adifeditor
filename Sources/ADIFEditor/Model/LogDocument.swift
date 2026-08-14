@@ -8,6 +8,11 @@ import ADIFKit
 /// (§6.2a) holds here only because nothing in this file touches the parsed model on the
 /// way through — `data(ofType:)` writes back exactly what `read(from:)` produced until
 /// the user edits something.
+///
+/// Every mutation goes through `replaceRecord(at:with:actionName:)`, which is the only
+/// place `log` changes after a parse. That is what keeps undo honest: one primitive to
+/// register, so no edit can reach the model without also becoming undoable.
+///
 /// `@objc` with an explicit name because `Info.plist`'s `NSDocumentClass` is looked up
 /// through the Objective-C runtime, and a Swift class is registered under a mangled,
 /// module-qualified name that the plist would otherwise have to spell exactly.
@@ -65,6 +70,56 @@ final class LogDocument: NSDocument {
     }
 
     override class func isNativeType(_ type: String) -> Bool { true }
+
+    // MARK: - Editing
+
+    /// Posted after any change to `log`, including undo and redo, so views can catch up
+    /// without every mutation site having to remember to tell them.
+    ///
+    /// `userInfo[changedRowKey]` carries the record index that changed.
+    static let recordsDidChange = Notification.Name("LogDocumentRecordsDidChange")
+    static let changedRowKey = "changedRow"
+
+    /// Sets one cell, which is one field of one record.
+    ///
+    /// What the edit means to the data — clearing removes the field, an added field
+    /// takes the file's own spelling — is ADIFKit's to decide and is tested there. This
+    /// only wraps the result in undo.
+    func setValue(_ newValue: String, forColumn column: String, inRecordAt index: Int) {
+        guard let edited = log.recordBySettingValue(newValue,
+                                                    forColumn: column,
+                                                    inRecordAt: index) else { return }
+        replaceRecord(at: index, with: edited, actionName: "Edit \(column)")
+    }
+
+    /// The single undoable mutation. Everything that changes a record goes through here.
+    ///
+    /// Undo restores the whole record rather than the one field's text, because a field
+    /// carries its position, its spelling and its trailing separator, and a cleared field
+    /// that was re-added from a string alone would come back in the wrong place with the
+    /// wrong casing. Editing a cell and undoing it has to leave the file byte-identical
+    /// (§6.2a), and only a snapshot gets that right.
+    func replaceRecord(at index: Int, with record: ADIFRecord, actionName: String) {
+        guard log.records.indices.contains(index) else { return }
+
+        let previous = log.records[index]
+        guard previous != record else { return }
+
+        undoManager?.registerUndo(withTarget: self) { document in
+            // Registering during undo is what gives redo for free: AppKit routes this
+            // second registration onto the redo stack.
+            document.replaceRecord(at: index, with: previous, actionName: actionName)
+        }
+        undoManager?.setActionName(actionName)
+
+        log.records[index] = record
+
+        NotificationCenter.default.post(
+            name: Self.recordsDidChange,
+            object: self,
+            userInfo: [Self.changedRowKey: index]
+        )
+    }
 
     // MARK: - Windows
 
