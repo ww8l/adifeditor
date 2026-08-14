@@ -72,8 +72,8 @@ final class LogWindowController: NSWindowController {
 
     // MARK: - Toolbar
 
-    /// §10.2 asks for both POTA commands on a visible toolbar button as well as in a
-    /// menu, since they are the reason the app exists.
+    /// §10.2 asks for the POTA command on a visible toolbar button as well as in a menu,
+    /// since it is the reason the app exists.
     private func installToolbar() {
         let toolbar = NSToolbar(identifier: "LogToolbar")
         toolbar.delegate = self
@@ -121,36 +121,30 @@ final class LogWindowController: NSWindowController {
 // MARK: - Toolbar
 
 extension NSToolbarItem.Identifier {
-    static let potaStamp = NSToolbarItem.Identifier("POTAStamp")
-    static let potaSplit = NSToolbarItem.Identifier("POTASplit")
+    static let pota = NSToolbarItem.Identifier("POTA")
 }
 
 extension LogWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.potaStamp, .potaSplit, .flexibleSpace]
+        [.pota, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.potaStamp, .potaSplit, .flexibleSpace, .space]
+        [.pota, .flexibleSpace, .space]
     }
 
     func toolbar(_ toolbar: NSToolbar,
                  itemForItemIdentifier identifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch identifier {
-        case .potaStamp:
+        case .pota:
             return toolbarItem(identifier,
-                               label: "Stamp",
+                               label: "POTA",
                                symbol: "mappin.and.ellipse",
-                               tooltip: "Fill MY_SIG_INFO with a park reference",
+                               tooltip: "Write a log stamped with a park reference, "
+                                      + "or one file per park for an n-fer",
                                action: #selector(stampForPOTA(_:)))
-        case .potaSplit:
-            return toolbarItem(identifier,
-                               label: "Split",
-                               symbol: "square.on.square",
-                               tooltip: "Write one file per park, each holding every QSO",
-                               action: #selector(splitForPOTA(_:)))
         default:
             return nil
         }

@@ -234,6 +234,13 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     the radio is never touched at all (§6.1) rather than merely not-yet-saved. One park and
     ten now take the identical path — destination, proposed names, write. §10.2 is amended.
 
+16. **One POTA button, not two.** With decision 15 making stamp and split one code path,
+    the two toolbar buttons behaved identically and differed only in how many references
+    the operator happened to type. The Split button and menu item are gone; the remaining
+    button is labelled "POTA". The park count already says which operation was meant, so
+    it is not a choice worth putting in front of the operator. §10.2's "two commands" is
+    amended to one.
+
 ## Identity
 
 - Bundle identifier: `com.ww8l.adifeditor`

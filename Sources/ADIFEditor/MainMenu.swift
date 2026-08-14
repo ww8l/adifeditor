@@ -72,11 +72,11 @@ enum MainMenu {
         ]
     }
 
-    /// §10.2's two commands, in a menu of their own as well as on the toolbar.
+    /// §10.2's command, in a menu of its own as well as on the toolbar. One item, because
+    /// the park count decides between a stamp and a split (decision 16).
     private static func potaMenu() -> [NSMenuItem] {
         [
-            item("Stamp Park Reference…", #selector(LogWindowController.stampForPOTA(_:)), "p"),
-            item("Split by Park…", #selector(LogWindowController.splitForPOTA(_:)), "P")
+            item("Stamp Park Reference…", #selector(LogWindowController.stampForPOTA(_:)), "p")
         ]
     }
 

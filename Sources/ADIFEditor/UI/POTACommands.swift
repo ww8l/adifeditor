@@ -21,24 +21,20 @@ extension LogWindowController {
 
     // MARK: - Commands
 
+    /// The whole POTA feature, on one button.
+    ///
+    /// §10.2 specified two commands and decision 15 made them one code path; this is the
+    /// interface catching up (decision 16). Two buttons that behave identically and differ
+    /// only in how many references you happen to type is a choice the operator should not
+    /// have to make — the number of parks already says which one they meant.
     @objc func stampForPOTA(_ sender: Any?) {
         promptForParks(
             message: "Stamp a park reference",
             information: "Writes a new file with this reference on every QSO that does not "
-                       + "already have one. The log you have open is not changed. Enter "
-                       + "more than one reference, separated by commas, for an n-fer.",
-            confirmTitle: "Continue"
-        ) { [weak self] parks in
-            self?.apply(parks)
-        }
-    }
-
-    @objc func splitForPOTA(_ sender: Any?) {
-        promptForParks(
-            message: "Split by park reference",
-            information: "One file per park, each holding every QSO — being inside three "
-                       + "parks means each contact counts for all three. Separate the "
-                       + "references with commas. The log you have open is not changed.",
+                       + "already have one. Enter more than one reference, separated by "
+                       + "commas, and you get a file per park, each holding every QSO — "
+                       + "being inside three parks means each contact counts for all "
+                       + "three. The log you have open is not changed either way.",
             confirmTitle: "Continue"
         ) { [weak self] parks in
             self?.apply(parks)
