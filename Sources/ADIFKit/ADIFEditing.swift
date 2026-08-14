@@ -50,6 +50,44 @@ extension ADIFDocument {
         return record
     }
 
+    /// The records reordered by one column.
+    ///
+    /// Compared as text, always. ADIF values are strings and this app does not coerce
+    /// types (§9) — sorting `RST_SENT` numerically would mean deciding that `-12` is a
+    /// number rather than the text the logger wrote, which is exactly the inference
+    /// decision 12 rules out. Dates and times sort correctly as text anyway, being
+    /// fixed-width `YYYYMMDD` and `HHMMSS`.
+    ///
+    /// Stable: records that tie keep the order they were already in. That is what makes
+    /// sorting by date and then by time do the useful thing rather than shuffling the
+    /// first sort away.
+    public func recordsSorted(byColumn column: String, ascending: Bool) -> [ADIFRecord] {
+        records.enumerated().sorted { left, right in
+            // An absent field and an empty one compare the same, so a column only some
+            // QSOs carry gathers its blanks at one end instead of scattering them.
+            let a = left.element[column] ?? ""
+            let b = right.element[column] ?? ""
+
+            switch a.caseInsensitiveCompare(b) {
+            case .orderedAscending: return ascending
+            case .orderedDescending: return !ascending
+            case .orderedSame: return left.offset < right.offset
+            }
+        }.map(\.element)
+    }
+
+    /// The records with the given rows removed.
+    ///
+    /// Removes from the highest index down so that each removal cannot shift the ones
+    /// still to come — the classic way to delete the wrong QSO.
+    public func recordsByDeleting(at indexes: IndexSet) -> [ADIFRecord] {
+        var remaining = records
+        for index in indexes.sorted(by: >) where remaining.indices.contains(index) {
+            remaining.remove(at: index)
+        }
+        return remaining
+    }
+
     /// Where a field being added back to a record belongs among its existing fields.
     ///
     /// Taken from the column order, which is itself merged from every record (see

@@ -76,7 +76,9 @@ final class LogDocument: NSDocument {
     /// Posted after any change to `log`, including undo and redo, so views can catch up
     /// without every mutation site having to remember to tell them.
     ///
-    /// `userInfo[changedRowKey]` carries the record index that changed.
+    /// `userInfo[changedRowKey]` carries the record index that changed, when exactly one
+    /// did. Its absence means the whole list moved — a sort, a deletion — and the view
+    /// should redraw everything.
     static let recordsDidChange = Notification.Name("LogDocumentRecordsDidChange")
     static let changedRowKey = "changedRow"
 
@@ -119,6 +121,43 @@ final class LogDocument: NSDocument {
             object: self,
             userInfo: [Self.changedRowKey: index]
         )
+    }
+
+    /// Reorders the log by one column.
+    ///
+    /// A sort is an edit. It changes the order records will be written in, so it marks
+    /// the document dirty and is undoable — but it reaches the file only when Save is
+    /// pressed (§6.1, owner's ruling), like every other change.
+    func sortRecords(byColumn column: String, ascending: Bool) {
+        replaceAllRecords(log.recordsSorted(byColumn: column, ascending: ascending),
+                          actionName: "Sort by \(column)")
+    }
+
+    /// Deletes rows. The one destructive operation in the app, and undoable like the rest.
+    func deleteRecords(at indexes: IndexSet) {
+        guard !indexes.isEmpty else { return }
+
+        let name = indexes.count == 1 ? "Delete QSO" : "Delete \(indexes.count) QSOs"
+        replaceAllRecords(log.recordsByDeleting(at: indexes), actionName: name)
+    }
+
+    /// The undoable mutation for changes that move or remove whole records, as opposed to
+    /// `replaceRecord`, which edits one in place.
+    ///
+    /// Snapshots the entire list. That is the honest cost of undoable sorting: the order
+    /// is the thing being changed, so there is nothing smaller to remember.
+    func replaceAllRecords(_ records: [ADIFRecord], actionName: String) {
+        let previous = log.records
+        guard previous != records else { return }
+
+        undoManager?.registerUndo(withTarget: self) { document in
+            document.replaceAllRecords(previous, actionName: actionName)
+        }
+        undoManager?.setActionName(actionName)
+
+        log.records = records
+
+        NotificationCenter.default.post(name: Self.recordsDidChange, object: self)
     }
 
     // MARK: - Windows

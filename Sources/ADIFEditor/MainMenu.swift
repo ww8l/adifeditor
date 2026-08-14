@@ -60,7 +60,14 @@ enum MainMenu {
             item("Cut", #selector(NSText.cut(_:)), "x"),
             item("Copy", #selector(NSText.copy(_:)), "c"),
             item("Paste", #selector(NSText.paste(_:)), "v"),
-            item("Select All", #selector(NSText.selectAll(_:)), "a")
+            item("Select All", #selector(NSText.selectAll(_:)), "a"),
+            .separator(),
+            // Command-Delete rather than a bare Delete: an unmodified ⌫ as a menu
+            // equivalent would be intercepted app-wide and never reach the field editor,
+            // so backspace would stop deleting characters while editing a cell. The bare
+            // Delete key still deletes rows — the grid handles it as a key press, which
+            // only happens when the table itself has focus.
+            item("Delete", #selector(GridViewController.delete(_:)), "\u{8}")
         ]
     }
 

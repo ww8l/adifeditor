@@ -114,6 +114,11 @@ final class GridViewController: NSViewController {
             column.width = width(forColumnNamed: name)
             column.minWidth = 40
             column.resizingMask = .userResizingMask
+
+            // Clicking the header sorts (§10.1). The row-number column deliberately gets
+            // no prototype — it numbers positions, so sorting by it is meaningless.
+            column.sortDescriptorPrototype = NSSortDescriptor(key: name, ascending: true)
+
             tableView.addTableColumn(column)
         }
     }
@@ -155,6 +160,32 @@ extension GridViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
         document.log.records.count
     }
+
+    /// Header clicks arrive here. The sort is done by the document rather than the view
+    /// because it reorders the records themselves, which is an undoable edit — the grid
+    /// is not keeping a separately ordered view of an unchanged log.
+    func tableView(_ tableView: NSTableView,
+                   sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+        guard let descriptor = tableView.sortDescriptors.first,
+              let column = descriptor.key else { return }
+
+        document.sortRecords(byColumn: column, ascending: descriptor.ascending)
+    }
+}
+
+// MARK: - Menu validation
+
+extension GridViewController: NSMenuItemValidation {
+
+    /// Greys out Delete when nothing is selected rather than letting it fire and do
+    /// nothing. `NSViewController` has no `validateMenuItem` of its own to override —
+    /// the responder chain finds it through this protocol.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(delete(_:)) {
+            return !tableView.selectedRowIndexes.isEmpty
+        }
+        return true
+    }
 }
 
 // MARK: - Delegate
@@ -188,6 +219,26 @@ extension GridViewController: NSTableViewDelegate {
         }
 
         return cell
+    }
+
+    /// Deletes the selected QSOs. Reached from Edit ▸ Delete and from the Delete key,
+    /// both of which route `delete:` down the responder chain to here.
+    @objc func delete(_ sender: Any?) {
+        let selection = tableView.selectedRowIndexes
+        guard !selection.isEmpty else { return }
+
+        document.deleteRecords(at: selection)
+        tableView.deselectAll(nil)
+    }
+
+    /// The Delete key. `NSTableView` does not turn it into `delete:` on its own.
+    override func keyDown(with event: NSEvent) {
+        let deleteKeys: Set<UInt16> = [51, 117]      // Delete and Forward Delete
+        if deleteKeys.contains(event.keyCode), !tableView.selectedRowIndexes.isEmpty {
+            delete(nil)
+            return
+        }
+        super.keyDown(with: event)
     }
 
     /// Commits an edit. Fires when the user presses Return or clicks away, which is

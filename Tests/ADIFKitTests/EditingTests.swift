@@ -290,6 +290,136 @@ struct EditingTests {
         #expect(text(document) == source, "§6.2a: undo has to land back on the exact bytes")
     }
 
+    // MARK: - Sorting
+
+    private func multiDateLog() throws -> ADIFDocument {
+        try parse("""
+            <CALL:5>W1ABC <QSO_DATE:8>20260213 <TIME_ON:6>222730 <EOR>
+            <CALL:5>K2XYZ <QSO_DATE:8>20260209 <TIME_ON:6>222045 <EOR>
+            <CALL:5>W3GHI <QSO_DATE:8>20260213 <TIME_ON:6>101500 <EOR>
+            <CALL:5>N4JKL <QSO_DATE:8>20260209 <TIME_ON:6>222345 <EOR>
+
+            """)
+    }
+
+    @Test("sorting by a column reorders the records")
+    func sortAscending() throws {
+        let document = try multiDateLog()
+        let sorted = document.recordsSorted(byColumn: "QSO_DATE", ascending: true)
+        #expect(sorted.map { $0["CALL"] } == ["K2XYZ", "N4JKL", "W1ABC", "W3GHI"])
+    }
+
+    @Test("sorting descending reverses it")
+    func sortDescending() throws {
+        let document = try multiDateLog()
+        let sorted = document.recordsSorted(byColumn: "QSO_DATE", ascending: false)
+        #expect(sorted.map { $0["CALL"] } == ["W1ABC", "W3GHI", "K2XYZ", "N4JKL"])
+    }
+
+    @Test("ties keep their original order")
+    func sortIsStableAtScale() throws {
+        // Sixty records all tying on the sorted column.
+        //
+        // Honest note: this assertion cannot currently fail. Swift's `sorted(by:)` is a
+        // timsort and stable in practice, so ties hold their order even without the
+        // comparator's explicit tiebreak — removing that tiebreak breaks no test here.
+        // The tiebreak stays because the standard library documents stability as *not*
+        // guaranteed, and the comparator being a strict total order makes the result
+        // ours rather than the implementation's. The test pins the behaviour the app
+        // depends on; it does not prove where the behaviour comes from.
+        let calls = (0..<60).map { String(format: "W%04d", $0) }
+        let body = calls
+            .map { "<CALL:5>\($0) <QSO_DATE:8>20260213 <EOR>" }
+            .joined(separator: "\n")
+        let document = try parse(body + "\n")
+
+        let sorted = document.recordsSorted(byColumn: "QSO_DATE", ascending: true)
+        #expect(sorted.map { $0["CALL"] } == calls,
+                "every record ties, so the sort must not move any of them")
+    }
+
+    @Test("sorting is stable, so sorting twice narrows rather than shuffles")
+    func sortIsStable() throws {
+        let document = try multiDateLog()
+
+        // Sort by time, then by date: within each date the time order has to survive,
+        // which is the whole point of prepping an activation log by two columns.
+        var staged = document
+        staged.records = staged.recordsSorted(byColumn: "TIME_ON", ascending: true)
+        let byDateThenTime = staged.recordsSorted(byColumn: "QSO_DATE", ascending: true)
+
+        #expect(byDateThenTime.map { $0["CALL"] } == ["K2XYZ", "N4JKL", "W3GHI", "W1ABC"])
+    }
+
+    @Test("records missing the sorted column gather at one end")
+    func sortPutsBlanksTogether() throws {
+        let document = try parse("""
+            <CALL:5>W1ABC <MY_SIG_INFO:7>US-1234 <EOR>
+            <CALL:5>K2XYZ <EOR>
+            <CALL:5>W3GHI <MY_SIG_INFO:7>US-0001 <EOR>
+
+            """)
+        let sorted = document.recordsSorted(byColumn: "MY_SIG_INFO", ascending: true)
+        #expect(sorted.map { $0["CALL"] } == ["K2XYZ", "W3GHI", "W1ABC"])
+    }
+
+    @Test("sorting loses no record and changes no value")
+    func sortPreservesEverything() throws {
+        let document = try multiDateLog()
+        var sorted = document
+        sorted.records = document.recordsSorted(byColumn: "CALL", ascending: false)
+
+        #expect(sorted.records.count == document.records.count)
+        #expect(Set(sorted.records.map { $0["CALL"] }) == Set(document.records.map { $0["CALL"] }))
+
+        // Reordering records must not rewrite any of them.
+        let restored = sorted.recordsSorted(byColumn: "QSO_DATE", ascending: true)
+        var back = document
+        back.records = restored
+        #expect(Set(text(back).split(separator: "\n")) == Set(text(document).split(separator: "\n")))
+    }
+
+    // MARK: - Deleting rows
+
+    @Test("deleting rows removes exactly those rows")
+    func deleteRemovesTheRightRecords() throws {
+        let document = try multiDateLog()
+        let remaining = document.recordsByDeleting(at: IndexSet([0, 2]))
+        #expect(remaining.map { $0["CALL"] } == ["K2XYZ", "N4JKL"])
+    }
+
+    @Test("deleting a discontiguous selection does not shift the wrong rows out")
+    func deleteHandlesDiscontiguousSelection() throws {
+        let document = try parse("""
+            <CALL:1>A <EOR>
+            <CALL:1>B <EOR>
+            <CALL:1>C <EOR>
+            <CALL:1>D <EOR>
+            <CALL:1>E <EOR>
+
+            """)
+        // Removing low-to-high would shift indices under itself and take C and E.
+        let remaining = document.recordsByDeleting(at: IndexSet([1, 3]))
+        #expect(remaining.map { $0["CALL"] } == ["A", "C", "E"])
+    }
+
+    @Test("deleting nothing, or rows that do not exist, is harmless")
+    func deleteOutOfRangeIsHarmless() throws {
+        let document = try multiDateLog()
+        #expect(document.recordsByDeleting(at: IndexSet()).count == 4)
+        #expect(document.recordsByDeleting(at: IndexSet([99])).count == 4)
+    }
+
+    @Test("deleting every row leaves a file with a header and no QSOs")
+    func deleteAllLeavesTheHeader() throws {
+        var document = try parse("<ADIF_VER:5>3.1.6\n<EOH>\n<CALL:5>W1ABC<EOR>\n")
+        document.records = document.recordsByDeleting(at: IndexSet([0]))
+
+        #expect(document.records.isEmpty)
+        #expect(text(document) == "<ADIF_VER:5>3.1.6\n<EOH>\n",
+                "the header the file arrived with survives its last QSO being deleted")
+    }
+
     // MARK: - Bounds
 
     @Test("editing a row that does not exist is refused, not fatal")
