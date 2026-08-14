@@ -24,10 +24,10 @@ extension LogWindowController {
     @objc func stampForPOTA(_ sender: Any?) {
         promptForParks(
             message: "Stamp a park reference",
-            information: "Every QSO that does not already have a park reference will get "
-                       + "this one. Enter more than one reference, separated by commas, to "
-                       + "split the log into a file per park instead.",
-            confirmTitle: "Stamp"
+            information: "Writes a new file with this reference on every QSO that does not "
+                       + "already have one. The log you have open is not changed. Enter "
+                       + "more than one reference, separated by commas, for an n-fer.",
+            confirmTitle: "Continue"
         ) { [weak self] parks in
             self?.apply(parks)
         }
@@ -38,37 +38,23 @@ extension LogWindowController {
             message: "Split by park reference",
             information: "One file per park, each holding every QSO — being inside three "
                        + "parks means each contact counts for all three. Separate the "
-                       + "references with commas.",
+                       + "references with commas. The log you have open is not changed.",
             confirmTitle: "Continue"
         ) { [weak self] parks in
             self?.apply(parks)
         }
     }
 
-    /// One park stamps the open log; more than one splits it into files (§10.2).
+    /// One park or many, the path is the same: choose a destination, confirm the names,
+    /// write new files.
+    ///
+    /// §10.2 originally stamped a single park into the open document in memory and only
+    /// wrote files for a split. The owner asked for one workflow, and it is the better
+    /// one: a stamp's whole purpose is producing the file to upload, under POTA's name
+    /// for it, and writing a new file means the log that came off the radio is never
+    /// touched at all (§6.1) rather than merely not-yet-saved. §10.2 is amended
+    /// (decision 15).
     private func apply(_ parks: [ParkReference]) {
-        guard let document = logDocument, let window else { return }
-
-        if parks.count == 1 {
-            let outcome = document.stampPOTA(with: parks[0],
-                                             alsoWriteProgramField: writesProgramField)
-
-            // §6.3: filling empty cells happens without comment. Cells left alone are
-            // worth a word, because the operator asked for a park to go on every QSO and
-            // it did not go on all of them.
-            guard outcome.preserved > 0 else { return }
-
-            let alert = NSAlert()
-            alert.messageText = outcome.filled == 0
-                ? "Every QSO already had a park reference"
-                : "Stamped \(outcome.filled) QSOs"
-            alert.informativeText = "\(outcome.preserved) already carried a reference and "
-                                  + "were left as they were. Change those in the grid if "
-                                  + "they are wrong."
-            alert.beginSheetModal(for: window)
-            return
-        }
-
         askAboutExistingReferences(parks)
     }
 
@@ -86,8 +72,8 @@ extension LogWindowController {
 
         let alert = NSAlert()
         alert.messageText = "\(existing) rows already have park references. Replace them in "
-                          + "the split output?"
-        alert.informativeText = "The file you have open is not changed either way."
+                          + "the output?"
+        alert.informativeText = "The log you have open is not changed either way."
         alert.addButton(withTitle: "Replace")
         alert.addButton(withTitle: "Keep Existing")
         alert.addButton(withTitle: "Cancel")
@@ -112,7 +98,9 @@ extension LogWindowController {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.prompt = "Choose"
-        panel.message = "Where should the \(parks.count) park files go?"
+        panel.message = parks.count == 1
+            ? "Where should the stamped log go?"
+            : "Where should the \(parks.count) park files go?"
 
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let folder = panel.url else { return }
@@ -152,11 +140,21 @@ extension LogWindowController {
         }
 
         let alert = NSAlert()
-        alert.messageText = "Write \(parks.count) files to \(folder.lastPathComponent)?"
-        alert.informativeText = callsign.isEmpty
-            ? "This log has no STATION_CALLSIGN or OPERATOR, so the callsign is missing "
-            + "from the names below. Add it here."
-            : "Each file holds every QSO, differing only in the park reference."
+        alert.messageText = parks.count == 1
+            ? "Write this file to \(folder.lastPathComponent)?"
+            : "Write \(parks.count) files to \(folder.lastPathComponent)?"
+
+        if callsign.isEmpty {
+            // §10.2 says to prompt once when the log carries no callsign. The name is
+            // editable anyway, so the prompt is the name itself with the callsign missing
+            // rather than another sheet in front of this one.
+            alert.informativeText = "This log has no STATION_CALLSIGN or OPERATOR, so the "
+                                  + "callsign is missing from the name below. Add it here."
+        } else {
+            alert.informativeText = parks.count == 1
+                ? "Every QSO without a park reference gets \(parks[0].text)."
+                : "Each file holds every QSO, differing only in the park reference."
+        }
         alert.accessoryView = stack
         alert.addButton(withTitle: "Write")
         alert.addButton(withTitle: "Cancel")

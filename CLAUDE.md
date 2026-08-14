@@ -227,6 +227,13 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     back to a record is *inserted* where the other records keep it rather than appended,
     since appending to record 1 relocates the column by the same mechanism. §9 is amended.
 
+15. **Stamping writes a new file, exactly like the split.** §10.2 had a single park
+    stamped into the open document in memory, with only a multi-park split writing files.
+    The owner asked for one workflow after using both: a stamp exists to produce the file
+    to upload under POTA's name for it, and writing a new file means the log that came off
+    the radio is never touched at all (§6.1) rather than merely not-yet-saved. One park and
+    ten now take the identical path — destination, proposed names, write. §10.2 is amended.
+
 ## Identity
 
 - Bundle identifier: `com.ww8l.adifeditor`
