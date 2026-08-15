@@ -23,6 +23,8 @@ enum MainMenu {
         [
             item("About ADIF Editor", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             .separator(),
+            item("Settings…", #selector(AppDelegate.showPreferences(_:)), ","),
+            .separator(),
             item("Hide ADIF Editor", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h",
                  modifiers: [.command, .option]),
@@ -70,7 +72,8 @@ enum MainMenu {
             // only happens when the table itself has focus.
             item("Delete", #selector(GridViewController.delete(_:)), "\u{8}"),
             .separator(),
-            item("Find Duplicates…", #selector(LogWindowController.findDuplicates(_:)), "d")
+            item("Find Duplicates…", #selector(LogWindowController.findDuplicates(_:)), "d"),
+            item("Fill from QRZ…", #selector(LogWindowController.fillFromQRZ(_:)), "l")
         ]
     }
 

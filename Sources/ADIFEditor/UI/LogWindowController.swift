@@ -12,6 +12,14 @@ final class LogWindowController: NSWindowController {
     /// Whether this window opened at a size and place the user had chosen before.
     private let hasSavedFrame: Bool
 
+    /// The frame this window is meant to open at, captured while it is still correct.
+    ///
+    /// Needed because AppKit re-derives the window's size from its content view
+    /// controller on the first layout pass, after `init` has finished and before
+    /// `showWindow` runs. The grid now supplies a fitting size, so that pass should agree
+    /// — this is the belt to that pair of braces, and it is cheap.
+    private var desiredFrame: NSRect = .zero
+
     /// `showWindow` runs again every time the document is brought forward; placement
     /// should not.
     private var hasBeenPlaced = false
@@ -25,19 +33,34 @@ final class LogWindowController: NSWindowController {
         )
         window.minSize = NSSize(width: 480, height: 240)
 
-        // The window takes its size from the grid's fitting size, which the grid supplies
-        // deliberately (see `GridViewController.loadView`) — a scroll view has none of
-        // its own, and a window with a zero-sized content view clamps itself to
-        // `minSize` in a screen corner.
-        window.contentViewController = GridViewController(document: document)
+        let grid = GridViewController(document: document)
+        window.contentViewController = grid
 
         // Order matters: `setFrameUsingName` restores a size the user chose earlier and
         // reports whether it found one, while `setFrameAutosaveName` both registers the
         // window for saving *and* restores, so it has to come second.
-        let restoredSavedFrame = window.setFrameUsingName(Self.frameAutosaveName)
+        let foundSavedFrame = window.setFrameUsingName(Self.frameAutosaveName)
         window.setFrameAutosaveName(Self.frameAutosaveName)
 
-        self.hasSavedFrame = restoredSavedFrame
+        // `setFrameUsingName` reports whether it *found* a saved frame, not whether it
+        // applied a usable one. A frame saved against a display that has since changed
+        // size is declined, and the window is left at its content view's own size — which
+        // for a scroll view is nothing, so it clamps to `minSize` in a corner. Worse, the
+        // autosave then writes that clamped frame back, and every future window inherits
+        // it. So judge by the result rather than the return value.
+        let content = window.contentRect(forFrameRect: window.frame)
+        let restoredUsableFrame = foundSavedFrame
+            && content.width > window.minSize.width
+            && content.height > window.minSize.height
+
+        // Sized from the grid rather than left to `fittingSize`. Applies both to a first
+        // run and to repairing a saved frame that no longer works; a frame the user can
+        // actually see always wins over one they once chose on another display.
+        if !restoredUsableFrame {
+            window.setContentSize(grid.preferredWindowContentSize)
+        }
+
+        self.hasSavedFrame = restoredUsableFrame
         super.init(window: window)
 
         installToolbar()
@@ -45,6 +68,9 @@ final class LogWindowController: NSWindowController {
         if !document.warnings.isEmpty {
             addWarningBanner(text: ParseWarningText.summary(document.warnings))
         }
+
+        // After the toolbar and any banner, so it includes their height.
+        desiredFrame = window.frame
     }
 
     required init?(coder: NSCoder) {
@@ -61,10 +87,15 @@ final class LogWindowController: NSWindowController {
     override func showWindow(_ sender: Any?) {
         shouldCascadeWindows = hasSavedFrame
 
-        if !hasSavedFrame && !hasBeenPlaced {
+        if !hasBeenPlaced {
             hasBeenPlaced = true
+
+            // Re-asserted here because this is the first moment after AppKit's own layout
+            // pass has had its say about the window's size.
+            window?.setFrame(desiredFrame, display: false)
             window?.layoutIfNeeded()
-            window?.center()
+
+            if !hasSavedFrame { window?.center() }
         }
 
         super.showWindow(sender)
@@ -123,16 +154,17 @@ final class LogWindowController: NSWindowController {
 extension NSToolbarItem.Identifier {
     static let pota = NSToolbarItem.Identifier("POTA")
     static let dedupe = NSToolbarItem.Identifier("Dedupe")
+    static let qrz = NSToolbarItem.Identifier("QRZ")
 }
 
 extension LogWindowController: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.pota, .dedupe, .flexibleSpace]
+        [.pota, .dedupe, .qrz, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.pota, .dedupe, .flexibleSpace, .space]
+        [.pota, .dedupe, .qrz, .flexibleSpace, .space]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -152,6 +184,13 @@ extension LogWindowController: NSToolbarDelegate {
                                symbol: "line.3.horizontal.decrease.circle",
                                tooltip: "Find QSOs that repeat, and delete the repeats",
                                action: #selector(findDuplicates(_:)))
+        case .qrz:
+            return toolbarItem(identifier,
+                               label: "QRZ",
+                               symbol: "person.text.rectangle",
+                               tooltip: "Fill empty name, location and zone fields from "
+                                      + "QRZ, for the selected QSOs or the whole log",
+                               action: #selector(fillFromQRZ(_:)))
         default:
             return nil
         }

@@ -96,17 +96,59 @@ final class GridViewController: NSViewController {
         configureTableView()
         buildColumns()
 
-        // A scroll view's fitting size is zero, and a window sizes itself to its content
-        // view controller's fitting size — which is how this window kept coming up
-        // clamped to its own minimum in a screen corner. These give it a size to find.
-        // Low priority so they lose to the user dragging the window bigger or smaller.
-        let width = scrollView.widthAnchor.constraint(equalToConstant: 1000)
-        let height = scrollView.heightAnchor.constraint(equalToConstant: 600)
+        // A scroll view has no intrinsic content size, so without these the grid's fitting
+        // size is nothing and AppKit drives the window down to `minSize` — not when the
+        // content view controller is assigned, but on the first layout pass afterwards,
+        // which is why this looked like the window shrinking on its own. Low priority so
+        // they break rather than fight the user dragging the window to any size they like.
+        let size = computedContentSize
+        let width = scrollView.widthAnchor.constraint(equalToConstant: size.width)
+        let height = scrollView.heightAnchor.constraint(equalToConstant: size.height)
         width.priority = .defaultLow
         height.priority = .defaultLow
         NSLayoutConstraint.activate([width, height])
 
         view = scrollView
+    }
+
+    /// The content size a window showing this grid should open at.
+    ///
+    /// Asked for explicitly by `LogWindowController` rather than left to `fittingSize`.
+    /// A scroll view has no fitting size of its own, and the low-priority width and height
+    /// constraints that used to stand in for one did not survive: with no remembered frame
+    /// to fall back on, the window came up clamped to its own `minSize` in a corner. A
+    /// number this view computes is one that can be checked.
+    ///
+    /// Sized to the data — the columns this log actually has, the rows it actually holds —
+    /// then held between a floor that is big enough to work in and a ceiling that keeps it
+    /// on the screen. A 40-column contest log opens wide; a 12-column FT8 log does not
+    /// open wider than it needs.
+    var preferredWindowContentSize: NSSize {
+        loadViewIfNeeded()
+        return computedContentSize
+    }
+
+    /// The same calculation, without forcing the view to load — `loadView` itself needs
+    /// this while it is still building the view it would otherwise be asked to load.
+    private var computedContentSize: NSSize {
+        let columnsWidth = tableView.tableColumns.reduce(CGFloat.zero) {
+            $0 + $1.width + tableView.intercellSpacing.width
+        }
+
+        // The header is not laid out yet at the point this is asked for, so its height is
+        // a constant rather than a measurement.
+        let headerHeight: CGFloat = 28
+        let rowsHeight = CGFloat(tableView.numberOfRows)
+                       * (tableView.rowHeight + tableView.intercellSpacing.height)
+
+        // `visibleFrame` excludes the menu bar and the Dock, so a window this size is one
+        // the user can actually see all of.
+        let screen = NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+
+        return NSSize(
+            width: min(max(columnsWidth + 4, 760), screen.width * 0.9),
+            height: min(max(rowsHeight + headerHeight + 4, 420), screen.height * 0.85)
+        )
     }
 
     private func configureTableView() {

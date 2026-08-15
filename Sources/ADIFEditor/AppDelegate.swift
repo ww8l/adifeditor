@@ -21,4 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    /// Settings lives on the delegate rather than on a window: the QRZ credentials and
+    /// the POTA program-field switch are the app's, not any one log's, and they have to be
+    /// reachable with no document open.
+    @MainActor @objc func showPreferences(_ sender: Any?) {
+        PreferencesWindowController.shared.showWindow(sender)
+    }
 }

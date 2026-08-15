@@ -12,11 +12,11 @@ extension LogWindowController {
 
     private var logDocument: LogDocument? { document as? LogDocument }
 
-    /// Whether to also write `MY_SIG` = `POTA`. Off by default (§10.2); the preference
-    /// that exposes it is M4 work, so for now it is only readable by someone who sets the
-    /// default by hand.
+    /// Whether to also write `MY_SIG` = `POTA`. Off by default (§10.2), and since
+    /// Preferences arrived with the QRZ lookup it finally has a checkbox rather than
+    /// being reachable only by setting the default by hand.
     private var writesProgramField: Bool {
-        UserDefaults.standard.bool(forKey: "WriteMySigField")
+        Preferences.writeMySigField
     }
 
     // MARK: - Commands

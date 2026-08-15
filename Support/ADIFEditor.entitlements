@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-	Two entitlements, and the list is meant to stay this short.
+	Three entitlements, and the list is meant to stay this short.
 
-	§6.5 is "no network", not "no network by default": there must be no
-	com.apple.security.network.client and no com.apple.security.network.server key
-	here, ever. Their absence under the sandbox is what makes the guarantee
-	enforceable by the OS rather than a promise in a document.
+	§6.5 was "no network" without qualification until 2026-08-14, and its absence
+	from this file was what made that enforceable by the OS rather than by
+	discipline. The owner amended it to allow one destination — a QRZ callsign
+	lookup on his own subscription (§10.4) — and network.client below is what that
+	cost. It cannot be taken back while this key is here.
+
+	What survives the amendment, and what this file still enforces:
+
+	  * com.apple.security.network.server must NEVER appear here. The app listens
+	    for nothing. That half of the original rule is untouched.
+
+	  * network.client is for QRZ's XML service and nothing else. Any second
+	    destination — an update check, a callsign database, a POTA API, telemetry
+	    of any kind — is a new decision needing the same conversation decision 17
+	    records, not a free ride on this key.
 
 	user-selected.read-write is the sandbox's file access: the user picks a file in
 	the open panel, and that grant covers it. Writing the split's output files (§10.2)
@@ -17,6 +28,8 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
 </plist>

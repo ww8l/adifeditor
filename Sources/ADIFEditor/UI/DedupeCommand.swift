@@ -38,7 +38,7 @@ extension LogWindowController {
         alert.informativeText = "QSOs matching on every ticked field are duplicates. The "
                               + "first of each set is kept and you will see the rest "
                               + "before anything is deleted."
-        alert.accessoryView = Self.scrollingStack(of: checkboxes, width: 260)
+        alert.accessoryView = SheetLayout.scrollingStack(of: checkboxes, width: 260)
         alert.addButton(withTitle: "Find Duplicates")
         alert.addButton(withTitle: "Cancel")
 
@@ -106,7 +106,7 @@ extension LogWindowController {
             : "\(total) duplicate QSOs found."
         alert.informativeText = "Untick any you want to keep. The log on disk is not "
                               + "changed until you save."
-        alert.accessoryView = Self.scrollingStack(of: checkboxes, width: 460)
+        alert.accessoryView = SheetLayout.scrollingStack(of: checkboxes, width: 460)
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
 
@@ -136,31 +136,4 @@ extension LogWindowController {
         return "#\(row + 1)  \(values)   — same as #\(original + 1)"
     }
 
-    // MARK: - Layout
-
-    /// A column of controls that scrolls once it gets long. A log can carry thirty fields
-    /// and a bad dedupe can propose hundreds of rows; neither should produce a sheet
-    /// taller than the screen.
-    private static func scrollingStack(of views: [NSView], width: CGFloat) -> NSView {
-        let stack = NSStackView(views: views)
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
-        stack.layoutSubtreeIfNeeded()
-
-        let contentHeight = stack.fittingSize.height
-        let visibleHeight = min(contentHeight, 320)
-
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0,
-                                                    width: width, height: visibleHeight))
-        scrollView.hasVerticalScroller = contentHeight > visibleHeight
-        scrollView.borderType = .bezelBorder
-        scrollView.drawsBackground = false
-
-        stack.frame = NSRect(x: 0, y: 0, width: width, height: contentHeight)
-        scrollView.documentView = stack
-
-        return scrollView
-    }
 }
