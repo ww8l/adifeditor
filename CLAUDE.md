@@ -28,27 +28,35 @@ explicitly. The script does that and is a no-op difference under a full Xcode in
 
 *Last updated 2026-08-14.*
 
-**M1 is complete and the owner has used it.** 99 tests across three suites, all green and
-all mutation-checked rather than merely observed passing.
+**M1 is complete and the owner has used it.** The QRZ lookup (§10.4) landed after it,
+on the owner's request, and is the reason this app can now reach the network at all.
+169 tests across five suites, all green and all mutation-checked rather than merely
+observed passing.
 
 ```
 Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser,
                    ADIFWriter, ADIFEditing (what an edit means), ADIFDuplicates
 Sources/POTAKit/   ParkReference, POTAStamp, POTAFilename
-Sources/ADIFEditor/ main, AppDelegate, MainMenu, Model/LogDocument,
+Sources/QRZKit/    QRZTransport (the seam), QRZSession, QRZCallsign, QRZResponseParser,
+                   QRZFieldMapping, QRZLookup, QRZBatch, QRZError
+Sources/ADIFEditor/ main, AppDelegate, MainMenu,
+                   Model/{LogDocument, Preferences, Keychain},
                    UI/{LogWindowController, GridViewController, GridClipboard,
-                   POTACommands, DedupeCommand, ParseWarningText}
+                   POTACommands, DedupeCommand, QRZCommand, QRZProgressSheet,
+                   PreferencesWindowController, SheetLayout, ParseWarningText}
 Support/           Info.plist, ADIFEditor.entitlements
 Scripts/           test.sh (the suite), bundle.sh (builds and signs ADIF Editor.app)
-Tests/             ADIFKitTests (round trip, parser, editing, duplicates), POTAKitTests
+Tests/             ADIFKitTests (round trip, parser, editing, duplicates), POTAKitTests,
+                   QRZKitTests (responses, session, lookup, batch)
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
 fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
 ```
 
 The app opens a log, edits cells, sorts on any header, selects/cuts/copies/pastes/deletes
-rows, stamps POTA references into new files, and finds duplicates. A titlebar banner
-reports anything the parser had to recover from. All of it verified running against the
-owner's real log, not just compiled.
+rows, stamps POTA references into new files, finds duplicates, and fills station details
+from QRZ. A titlebar banner reports anything the parser had to recover from. All of it
+verified running against the owner's real log, not just compiled — except the live QRZ
+request, which needs his subscription and password.
 
 **Nothing in the app ever writes to the file that was opened** except Save. The POTA
 commands write new files only (decision 15), autosave-in-place is off and must stay off,
@@ -61,13 +69,36 @@ file quietly differs from the one opened, so they live where §11's suite can re
 The app layer is left with undo, dirty state, redisplay and panels, which §11 exempts
 from tests. Follow that split for anything new.
 
-**Beyond the spec:** dedupe (toolbar and Edit ▸ Find Duplicates) is not in DESIGN.md at
-all — the owner asked for it after using M1. Closest to §10.3's validation panel in
-spirit, but it deletes rather than advises, so it shows every row before removing any.
+QRZKit follows the same split for the same reason, and the reason is now sharper: with
+the OS no longer enforcing §6.5, everything above `QRZTransport` is a pure function of
+already-fetched data so that "fills empty cells, never overwrites" is provable without a
+socket. Nothing in `Tests/QRZKitTests` opens a connection, and nothing there references
+`URLSessionTransport`. Keep it that way.
+
+**Beyond the spec, then folded in:** dedupe (toolbar and Edit ▸ Find Duplicates) is still
+not in DESIGN.md — the owner asked for it after using M1. Closest to §10.3's validation
+panel in spirit, but it deletes rather than advises, so it shows every row before removing
+any. The QRZ lookup *was* written into DESIGN.md as §10.4 when it was built.
 
 Still not built, deliberately: no CI workflow (§12's GitHub Actions pipeline is M4), no
-app icon, no preferences (so `MY_SIG` is reachable only by setting the `WriteMySigField`
-default by hand), no column filters or find/replace (M2/M3).
+app icon, no column filters or find/replace (M2/M3).
+
+**Things learned the hard way, worth not relearning:**
+
+- **`setFrameUsingName` returning `true` means it found a saved frame, not that it applied
+  one.** A frame saved against a display that later changes size is declined, and the
+  window falls back to its content view's size — which for an `NSScrollView` is nothing,
+  so it clamps to `minSize`. The autosave then writes the clamped frame back and it
+  compounds every launch. `LogWindowController` now judges the restore by its result.
+- **AppKit re-derives a window's size from its content view controller on the first
+  layout pass**, after `init` and before `showWindow`, not only when the controller is
+  assigned. `GridViewController.preferredWindowContentSize` gives it a real answer and the
+  frame is re-asserted once in `showWindow`.
+- **The Keychain works under sandbox + ad-hoc signing**, but only inside a bundle — a bare
+  signed executable with the sandbox entitlement is killed at launch. Test Keychain
+  changes with a real `.app`, not a command-line binary.
+- **`log` is shadowed in this zsh.** Use `/usr/bin/log` for unified-logging queries. The
+  sandbox also blocks `/tmp`, so an app-side debug sink has to write into the container.
 
 **Open items:**
 
@@ -75,14 +106,19 @@ default by hand), no column filters or find/replace (M2/M3).
   `ww8l`. The owner was asked whether to create `adif-editor` public or private and
   hasn't decided; do not push without an answer. Public means the FT8CN fixture's real
   callsigns go public, which §11 sanctions but is his call.
+- **The live QRZ path has never run.** Every test uses a fake transport. The canned XML is
+  built from QRZ's published format, not captured from the service, so any drift between
+  their documentation and their behaviour is invisible to the suite. Replace the fixtures
+  with real captures the first time a subscription is at hand, and scrub the session key
+  before committing them.
 - **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
-- **DESIGN.md has not been amended, and the gap is now wide.** The sixteen decisions
-  below live only in this file, and four of them (2, 14, 15, 16) contradict what §9 and
-  §10.2 say in plain words — a reader of DESIGN.md alone would build the wrong app. It
-  also does not mention dedupe. The owner has been offered a fold-in twice and hasn't
-  said yes.
+- **DESIGN.md is amended but still behind.** §6.5, §10.4, §3, §5, §7, §11, §13 and §14
+  were brought up to date when QRZ landed. The seventeen decisions below still live only
+  in this file, and four of them (2, 14, 15, 16) contradict what §9 and §10.2 say in plain
+  words — a reader of DESIGN.md alone would build the wrong app. It also does not mention
+  dedupe. The owner has been offered a fold-in three times and hasn't said yes.
 
 ## Core principles (DESIGN.md §6) — invariants
 
