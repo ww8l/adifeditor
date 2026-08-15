@@ -120,6 +120,19 @@ app icon, no column filters or find/replace (M2/M3).
   words — a reader of DESIGN.md alone would build the wrong app. It also does not mention
   dedupe. The owner has been offered a fold-in three times and hasn't said yes.
 
+**Where to pick up (paused 2026-08-14).** Working tree clean, everything committed,
+nothing pushed. The build is current and `.build/ADIF Editor.app` is signed with the
+network entitlement.
+
+The one thing waiting on the owner is the **first live QRZ lookup** — Settings (⌘,),
+enter his subscription credentials, then select rows and hit QRZ. Every code path around
+it has been exercised with a fake transport; the real request has never been made. If it
+misbehaves, suspect the canned fixtures before suspecting the logic, and capture the real
+response to replace them.
+
+After that the open build choices are unchanged: M2 (column filters, save selection as a
+new file), the DESIGN.md fold-in, or the repo's public/private question.
+
 ## Core principles (DESIGN.md §6) — invariants
 
 If an implementation decision conflicts with one of these, **the principle wins and
