@@ -25,6 +25,13 @@ final class GridViewController: NSViewController {
     /// collide with an ADIF field name, which cannot have one.
     private static let rowNumberColumn = NSUserInterfaceItemIdentifier("row number")
 
+    private lazy var findBar = FindBar()
+
+    /// The current search's matches. Recomputed on every keystroke, and again after any
+    /// edit — a record that no longer holds the text is no longer a match, and stepping
+    /// onto a stale row index would select the wrong QSO.
+    private var matches = FindMatches()
+
     init(document: LogDocument) {
         self.document = document
         self.columns = document.log.columnNames
@@ -95,6 +102,7 @@ final class GridViewController: NSViewController {
 
         configureTableView()
         buildColumns()
+        configureFindBar()
 
         // A scroll view has no intrinsic content size, so without these the grid's fitting
         // size is nothing and AppKit drives the window down to `minSize` — not when the
@@ -108,7 +116,24 @@ final class GridViewController: NSViewController {
         height.priority = .defaultLow
         NSLayoutConstraint.activate([width, height])
 
-        view = scrollView
+        // A stack view so hiding the find bar collapses it rather than leaving a gap:
+        // `isHidden` on an arranged subview removes it from the layout, which is exactly
+        // the behaviour wanted and is not worth hand-rolling with constraints.
+        let stack = NSStackView(views: [findBar, scrollView])
+        stack.orientation = .vertical
+        stack.spacing = 0
+        stack.alignment = .leading
+        stack.distribution = .fill
+        stack.setHuggingPriority(.defaultLow, for: .vertical)
+
+        NSLayoutConstraint.activate([
+            findBar.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            findBar.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: stack.trailingAnchor)
+        ])
+
+        view = stack
     }
 
     /// The content size a window showing this grid should open at.
@@ -149,6 +174,79 @@ final class GridViewController: NSViewController {
             width: min(max(columnsWidth + 4, 760), screen.width * 0.9),
             height: min(max(rowsHeight + headerHeight + 4, 420), screen.height * 0.85)
         )
+    }
+
+    // MARK: - Find
+
+    private func configureFindBar() {
+        findBar.isHidden = true
+
+        findBar.onSearch = { [weak self] in self?.search(for: $0) }
+        findBar.onNext = { [weak self] in self?.step { $0.next(after: $1) } }
+        findBar.onPrevious = { [weak self] in self?.step { $0.previous(before: $1) } }
+        findBar.onClose = { [weak self] in self?.closeFind() }
+    }
+
+    /// ⌘F. Opens the bar if it is closed and focuses it either way, so a second ⌘F is a
+    /// new search rather than a no-op.
+    @objc func showFind(_ sender: Any?) {
+        findBar.isHidden = false
+        findBar.takeFocus()
+    }
+
+    @objc func findNext(_ sender: Any?) {
+        step { $0.next(after: $1) }
+    }
+
+    @objc func findPrevious(_ sender: Any?) {
+        step { $0.previous(before: $1) }
+    }
+
+    private func closeFind() {
+        findBar.isHidden = true
+        view.window?.makeFirstResponder(tableView)
+    }
+
+    /// Runs the search and moves to the first match at or after where the operator is,
+    /// rather than jumping to the top of the log every keystroke.
+    private func search(for text: String) {
+        matches = document.log.find(text)
+
+        guard !text.isEmpty else {
+            findBar.showStatus(position: nil, of: nil)
+            return
+        }
+        guard !matches.isEmpty else {
+            findBar.showStatus(position: 0, of: 0)
+            return
+        }
+
+        // `previous(before:)` of the row after the selection, so a selected row that
+        // itself matches stays put while the text is being typed. Stepping is what moves
+        // off a match; typing should not.
+        let anchor = tableView.selectedRow >= 0 ? tableView.selectedRow : nil
+        let target = anchor.flatMap { matches.ordinal(of: $0) != nil ? $0 : nil }
+            ?? matches.next(after: anchor.map { $0 - 1 })
+
+        select(match: target)
+    }
+
+    private func step(_ move: (FindMatches, Int?) -> Int?) {
+        // Recomputed rather than trusted: rows may have been edited, sorted or deleted
+        // since the text was typed, and a stale index would select an unrelated QSO.
+        matches = document.log.find(findBar.searchText)
+        select(match: move(matches, tableView.selectedRow >= 0 ? tableView.selectedRow : nil))
+    }
+
+    private func select(match row: Int?) {
+        guard let row, row < tableView.numberOfRows else {
+            findBar.showStatus(position: matches.isEmpty ? 0 : nil, of: matches.count)
+            return
+        }
+
+        tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        tableView.scrollRowToVisible(row)
+        findBar.showStatus(position: matches.ordinal(of: row), of: matches.count)
     }
 
     private func configureTableView() {

@@ -72,6 +72,10 @@ enum MainMenu {
             // only happens when the table itself has focus.
             item("Delete", #selector(GridViewController.delete(_:)), "\u{8}"),
             .separator(),
+            item("Find", #selector(GridViewController.showFind(_:)), "f"),
+            item("Find Next", #selector(GridViewController.findNext(_:)), "g"),
+            item("Find Previous", #selector(GridViewController.findPrevious(_:)), "G"),
+            .separator(),
             item("Find Duplicates…", #selector(LogWindowController.findDuplicates(_:)), "d"),
             item("Fill from QRZ…", #selector(LogWindowController.fillFromQRZ(_:)), "l")
         ]
