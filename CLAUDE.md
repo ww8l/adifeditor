@@ -107,10 +107,20 @@ coming** — see decision 18.
 
 **Open items:**
 
-- **The repo is local only.** No remote, nothing pushed. `gh` is authenticated as
-  `ww8l`. The owner was asked whether to create `adif-editor` public or private and
-  hasn't decided; do not push without an answer. Public means the FT8CN fixture's real
-  callsigns go public, which §11 sanctions but is his call.
+- **The repo is local only, and going public later.** No remote, nothing pushed. `gh` is
+  authenticated as `ww8l`. The owner ruled on 2026-08-15: **public, but not yet.** Timing
+  is his; do not create the remote or push without being asked.
+
+  Two things follow from "later, but public". First, **history is published too** — a
+  credential committed today is still in the log after it is deleted tomorrow, and
+  rewriting history is far worse than never committing it. The history was scanned on
+  2026-08-15 and is clean: every `password`/`sessionKey` hit is a parameter name, and the
+  one key-shaped hex string in `QRZFakes.swift` is invented, not captured. Re-check before
+  pushing, especially if the QRZ fixtures have been replaced with real captures by then.
+
+  Second, the FT8CN fixture is fine to publish. It holds callsigns, four-character grid
+  squares, dates, signal reports and FT8CN's own distance comments — no names, addresses
+  or emails, and all of it is already public through LoTW, PSK Reporter and POTA spots.
 - **The QRZ fixtures are still synthetic**, even though the live path now works. The canned
   XML is built from QRZ's published format, not captured from the service, so any drift
   between their documentation and their behaviour remains invisible to the suite. The
