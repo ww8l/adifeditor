@@ -12,28 +12,42 @@ a gap to fix (see "Decisions taken" below).
 ```
 swift build                     compile
 Scripts/test.sh                 run the suite
+Scripts/ci-local.sh             build + test, what the pre-push hook runs
 Scripts/bundle.sh               build .build/ADIF Editor.app and launch it from there
 Scripts/bundle.sh release       universal arm64 + x86_64, plus the .dmg — what ships
+MARKETING_VERSION=26.8.16 Scripts/bundle.sh release    stamp a version (CI sets this)
 ```
 
 `swift build` alone produces a bare executable, which is not a Mac app: the document
 types live in `Info.plist`, and Apple Silicon kills an unsigned arm64 binary outright
-rather than warning (§12). `Scripts/bundle.sh` assembles the bundle and ad-hoc signs it.
+rather than warning (§12). `Scripts/bundle.sh` assembles the bundle, generates the
+`.icns` from `Support/Icon/AppIcon-1024.png`, and ad-hoc signs it.
 
 `Scripts/test.sh` rather than plain `swift test`: without Xcode.app, SwiftPM doesn't
 wire up the search paths for `Testing.framework`, so the framework needs pointing at
-explicitly. The script does that and is a no-op difference under a full Xcode install.
+explicitly. Under a full Xcode install — which is what the CI runner has — the framework
+lives elsewhere and SwiftPM finds it unaided, so the script falls through to plain
+`swift test`. That fallback is not hypothetical tidiness: as originally written the
+script treated the missing directory as fatal and would have failed the first CI run on
+its first step.
+
+A pre-push hook runs `Scripts/ci-local.sh` on every push. It is enabled per-clone and is
+already set here; a fresh clone needs `git config core.hooksPath .githooks`.
 
 ## Where things stand
 
-*Last updated 2026-08-15.*
+*Last updated 2026-08-16.*
 
-**M1 is complete and the owner has used it.** The QRZ lookup (§10.4) landed after it,
-on the owner's request, and is the reason this app can now reach the network at all.
-**The live QRZ lookup has now run against the real service, on the owner's subscription,
-and worked** (2026-08-15) — the fake-transport-only caveat that stood here is retired.
-Find (⌘F) followed. 183 tests, all green and all mutation-checked rather than merely
-observed passing.
+**M1 is complete, the owner has used it, and it has now shipped.** The QRZ lookup (§10.4)
+landed after M1, on the owner's request, and is the reason this app can reach the network
+at all. **The live QRZ lookup has run against the real service, on the owner's
+subscription, and worked** (2026-08-15) — the fake-transport-only caveat that stood here
+is retired. Find (⌘F) followed. 183 tests, all green and all mutation-checked rather than
+merely observed passing.
+
+**`v26.8.16` is built, verified and sitting as a draft release** (2026-08-16). Universal,
+icon, signed, 879K `.dmg`, produced by GitHub Actions rather than by hand. It was
+downloaded, mounted and inspected — not merely reported green by the runner.
 
 ```
 Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser,
@@ -48,8 +62,13 @@ Sources/ADIFEditor/ main, AppDelegate, MainMenu,
                    POTACommands, DedupeCommand, QRZCommand, QRZProgressSheet,
                    PreferencesWindowController, SheetLayout, ParseWarningText,
                    FindBar}
-Support/           Info.plist, ADIFEditor.entitlements
-Scripts/           test.sh (the suite), bundle.sh (builds and signs ADIF Editor.app)
+Support/           Info.plist, ADIFEditor.entitlements,
+                   Icon/{AppIcon-1024.png (the source of truth), AppIcon.svg,
+                   build_icon.py (provenance, not a build step)}
+Scripts/           test.sh (the suite), ci-local.sh (the pre-push gate),
+                   bundle.sh (builds, icons and signs ADIF Editor.app)
+.github/workflows/ ci.yml (dormant — PR and manual only), release.yml (tags and manual)
+.githooks/         pre-push — runs ci-local.sh, skips tags and branch deletions
 Tests/             ADIFKitTests (round trip, parser, editing, duplicates, find),
                    POTAKitTests, QRZKitTests (responses, session, lookup, batch)
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
@@ -84,9 +103,22 @@ not in DESIGN.md — the owner asked for it after using M1. Closest to §10.3's 
 panel in spirit, but it deletes rather than advises, so it shows every row before removing
 any. The QRZ lookup *was* written into DESIGN.md as §10.4 when it was built.
 
-Still not built, deliberately: no CI workflow (§12's GitHub Actions pipeline is M4), no
-app icon, no replace, no save-selection-as-new-file (M2/M3). **Column filters are not
+§12's GitHub Actions pipeline and the app icon — both M4 — landed on 2026-08-16. Still not
+built: no replace, no save-selection-as-new-file (M2/M3). **Column filters are not
 coming** — see decision 18.
+
+**The icon** is the owner's design, authored in Claude Desktop and handed over as an SVG,
+a 1024 PNG and the generator that produced them. A navy superellipse holding a cream log
+card, three rows of ADIF's own `<field>` syntax as chevrons and bars, one row picked out
+in amber. Two things about it are load-bearing and easy to break. Its body occupies 80% of
+the canvas — measured 820/1024 with even 102px margins, against Apple's 824/1024 grid —
+and that padding is *baked into the art* because macOS, unlike iOS, does not mask app
+icons: what is in the PNG is what lands in the Dock. And the `.icns` is generated by
+`bundle.sh` rather than committed, so the PNG stays the single source of truth. `sips` and
+`iconutil` are both in `/usr/bin` rather than inside Xcode.app, so this holds under
+decision 9 and runs headless on a runner. Verified through `NSWorkspace` on the built
+bundle: macOS resolves 32 representations and applies its own Dock shadow, which is what
+it does for a real app icon rather than a generic fallback.
 
 **Things learned the hard way, worth not relearning:**
 
@@ -114,15 +146,49 @@ coming** — see decision 18.
   both signatures.
 - **A whole documented command can be dead.** The lesson generalises past this one bug: if
   a script path has never been executed, it does not work until proven otherwise, however
-  carefully it was written.
+  carefully it was written. **This bit a third time on 2026-08-16**: `Scripts/test.sh`
+  claimed in its own comment to be "a no-op difference under a full Xcode install" and in
+  fact exited with an error there, because the CLT framework directory it probes does not
+  exist under Xcode. Nobody had ever run it on such a machine. It would have failed the
+  first CI run on its first step. Assume the same of anything else here whose only
+  evidence is that it reads correctly.
+- **Actions bills in quota-minutes, and the multiplier is the whole story.** Wall clock
+  times a runner multiplier: Linux 1x, Windows 2x, **macOS 10x**. Private repos get
+  2,000/month; public repos are unmetered on every platform, which is why going public
+  makes this entire concern evaporate. Local runs cost nothing ever — GitHub bills for its
+  own rented machines, not yours.
+- **The default job timeout is 6 hours, which at 10x is 3,600 quota-minutes** — nearly
+  double the monthly allowance, from a single run that hangs and never finishes. Every job
+  here carries `timeout-minutes`. It is the highest-value line in either workflow and it
+  has nothing to do with how long the work actually takes.
+- **Estimates of CI cost were three times too pessimistic.** The real numbers, measured:
+  a full universal build with `.dmg` takes ~71s locally and ~90s on a runner, so a release
+  costs ~15 quota-minutes, not the ~55 that was assumed while designing around it. Having
+  zero dependencies is why. Design for the multiplier, but measure before treating the
+  budget as tight.
+- **A YAML parser validating a workflow proves nothing about Actions.** It proves the file
+  is well-formed YAML. The `${{ }}` expressions, `github.ref_type`, and step outputs are
+  only checked by GitHub's runner. Prove a workflow with `workflow_dispatch` before the
+  first tag; a workflow debugged by pushing tags costs a billed run and a spent version
+  number per mistake.
+- **`right-click → Open` no longer bypasses Gatekeeper.** Apple removed it in macOS 15 for
+  apps Gatekeeper blocks; the route is System Settings › Privacy & Security › **Open
+  Anyway**. README.md already had this right; the release notes did not, having been
+  copied from the sibling project — whose README still carries the stale instruction and
+  has shipped it on six releases.
 
 **Open items:**
 
 - **The repo is on GitHub, private, and going public later.**
   `https://github.com/ww8l/adifeditor`, created 2026-08-16 at the owner's request, `main`
-  tracking `origin/main`, all 27 commits pushed. `gh` is authenticated as `ww8l`. He asked
+  tracking `origin/main`, everything pushed. `gh` is authenticated as `ww8l`. He asked
   for **private for now, public later** — the flip is his call and his timing; don't run
   `gh repo edit --visibility public` without being asked.
+
+  Private does not restrict anything about building or releasing. The draft release and
+  its `.dmg` are downloadable by the owner exactly as on the sibling project, whose six
+  releases are all still private drafts that he installs from. Private bites only when
+  handing the `.dmg` to someone who is not him.
 
   **The history scan is the gate on that flip, and it has not been re-run since
   2026-08-15.** Private means a leaked credential is still recoverable by rewriting
@@ -147,46 +213,63 @@ coming** — see decision 18.
 - **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
+- **The release pipeline has run twice and nothing else has.** `ci.yml` has never
+  executed — it fires only on `pull_request` and `workflow_dispatch`, and the owner
+  commits straight to main. That is deliberate (decision 19) and not a gap to close: the
+  pre-push hook is the routine gate. But it does mean the CI workflow itself is an unproven
+  path, exactly the category this file keeps warning about. Fire it once by hand before
+  relying on it.
 - **DESIGN.md is amended but still behind.** §6.5, §10.4, §3, §5, §7, §11, §13 and §14
   were brought up to date when QRZ landed; §12 was amended on 2026-08-15 for the `.dmg`
-  and the xcbuild collision. The eighteen decisions below still live only in this file,
+  and the xcbuild collision, and describes a pipeline whose triggers decision 19 has since
+  narrowed. The nineteen decisions below still live only in this file,
   and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2 say in plain
   words — a reader of DESIGN.md alone would build the wrong app, and decision 18 now means
   they would build a whole feature that was rejected. It also does not mention dedupe or
   find. The owner has been offered a fold-in three times and hasn't said yes.
 - **README is current as of 2026-08-15** and is the one document safe to hand a stranger.
   Install section written, feature list matches what exists, and the byte-identity
-  guarantee is stated with its one exception. It had claimed "no network connections of
-  any kind" for a day after QRZ landed — worth re-reading it whenever a capability
-  changes, since it is the file that goes public first and the easiest one to forget.
+  guarantee is stated with its one exception. Its first-launch instructions are correct
+  for macOS 15+, which the release notes initially were not. It had claimed "no network
+  connections of any kind" for a day after QRZ landed — worth re-reading it whenever a
+  capability changes, since it is the file that goes public first and the easiest one to
+  forget. **It still says no release has been published; that is now wrong** and is the
+  first thing to fix there.
 
-**Where to pick up (paused 2026-08-15, end of a long session).** Working tree clean, six
-commits that day, nothing pushed. `.build/ADIF Editor.app` is the *debug* bundle, signed
-with the network entitlement and left running against the FT8CN fixture.
+**Where to pick up (paused 2026-08-16).** Working tree clean, five commits that day, all
+pushed. `.build/ADIF Editor.app` is a *release* bundle stamped 26.8.16, and **it was left
+running** with no document open — quit it before rebuilding, and ask rather than using
+`osascript ... to quit`, which last session parked the app on a save-changes sheet and
+blocked Apple Events until the owner answered.
 
-Nothing is waiting on the owner. What landed on 2026-08-15, in order: the live QRZ lookup
-finally ran against the real service and worked; a column-filter system was built and then
-deleted in favour of ⌘F find (decision 18); `Scripts/bundle.sh release` was found to have
-never worked and was fixed, and now also produces the `.dmg`; the README's install section
-was written and its stale claims corrected.
+Nothing is waiting on the owner. What landed on 2026-08-16, in order: the GitHub remote
+was created private and everything pushed; CI and release workflows plus the pre-push gate
+went in, along with the `test.sh` fix that path needed; the owner's icon was integrated;
+the release notes' Gatekeeper instructions were corrected; the pipeline was proven with a
+dispatch dry run and then `v26.8.16` was tagged, built and verified as a draft release.
+
+Two Actions runs total, both green first time, ~30 quota-minutes of 2,000 spent.
 
 The open build choices, roughly in order of how much they are worth:
 
-- **CI (§12, M4).** There is no `.github/` at all. This is now the most tractable it has
-  ever been — `bundle.sh release` works, so a workflow has something real to call, and
-  GitHub's runners have the Xcode that this machine lacks. Build, test, `.dmg`, attach to
-  a Release on tag.
-- **An app icon (M4).** `Contents/Resources` is created and empty. The last visible thing
-  missing before the app looks finished.
-- **The DESIGN.md fold-in.** Offered three times, never accepted. Grows more expensive
-  each session; decision 18 in particular means DESIGN.md now describes a feature that was
-  built and rejected.
+- **The DESIGN.md fold-in.** Now the most valuable thing outstanding, and offered four
+  times without a yes. Grows more expensive each session; decision 18 means DESIGN.md
+  describes a feature that was built and rejected, and §12 now describes a pipeline whose
+  triggers decision 19 narrowed.
+- **README's release section.** It says no release has been published. One tag exists.
 - **Save selection as a new file** — the last of M2 — and **M3's replace**.
+- **Bump `actions/checkout` and `actions/upload-artifact` to `@v5`.** Both target Node 20,
+  which GitHub has deprecated; runs are being forced onto Node 24 and warn each time.
+  Nothing is broken.
+- **A document icon** for `.adi` files — the app mark on a page shape. Purely cosmetic and
+  the owner has not asked for it.
 
-One process note worth carrying forward: `osascript ... to quit` was used on the app while
-the owner had unsaved QRZ edits in it, which parked the whole thing on a save-changes sheet
-and blocked Apple Events until he answered. Check for unsaved work, or just ask him to
-quit it, before rebuilding a bundle he is using.
+Two things about the icon at small sizes, recorded so they are not rediscovered: at 32px
+it is fully legible, rows and all, and at 16px the amber bar survives as a distinct mark
+so there is still a signature — but the three rows blur into vertical banding, making the
+card read as columns rather than rows. `iconutil` accepts hand-drawn art per size if that
+ever matters. The owner has seen it rendered and is happy with it; do not "improve" it
+unasked.
 
 ## Core principles (DESIGN.md §6) — invariants
 
@@ -399,6 +482,37 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     a reason to build the largest version of it. §10.1 said "filter on any column by value"
     and got a multi-column conjunctive query builder. Build the small thing, show it, and
     let him ask for more.
+
+19. **CI is dormant; the pre-push hook is the gate. Releases are CalVer drafts.**
+    *(2026-08-16, owner's direction — "don't burn any actions".)* §12 asks for a GitHub
+    Actions pipeline and now has one, but with triggers narrower than a reader of §12 would
+    expect, and the narrowing is deliberate rather than unfinished work.
+
+    `ci.yml` fires only on `pull_request` and `workflow_dispatch`. It has no push trigger,
+    so ordinary work costs nothing. `release.yml` fires on a `vYY.M.D` tag or a dispatch.
+    Everything routine runs on this machine through `.githooks/pre-push` →
+    `Scripts/ci-local.sh`, free and unlimited.
+
+    The reasoning is the sibling project's, inverted. There, macOS was dropped from CI
+    because Linux and Windows covered what a Mac laptop cannot check locally. Here the app
+    is macOS-only, so there is no cheap leg to keep and every hosted run bills at 10x — but
+    the same premise cuts deeper in our favour: the development machine *is* the target
+    platform, so the free local check tests the real thing rather than a stand-in. The
+    rented Mac earns its multiplier on exactly two jobs: building what ships, and giving a
+    clean-checkout second opinion with the full Xcode this machine lacks (decision 9).
+
+    Versions are CalVer matching the sibling project: `vYY.M.D`, no zero padding —
+    `v26.8.3`, `v26.8.13`. The tag is the single source of truth; `MARKETING_VERSION`
+    stamps it into the bundled plist at build time and never back into `Support/Info.plist`.
+    Two releases in one day collide, and the escape hatch is a fourth component
+    (`v26.8.16.1`), which would need the tag glob widened. It has not come up.
+
+    Releases are **drafts** and stay that way unless the owner publishes one — the sibling
+    project's six releases are all still drafts he installs from. Nothing is notarized and
+    nothing will be: no paid Apple Developer account, ad-hoc signing only, with the
+    Gatekeeper bypass documented in the README and the release notes. A pleasant
+    consequence worth protecting: **there are no secrets in this repo and no reason to add
+    any** — no certificates, no API keys, nothing to leak when it goes public.
 
 ## Identity
 
