@@ -364,6 +364,36 @@ guarantee for free: that a lookup proposes fills and never overwrites an existin
 **CI:** GitHub Actions on macOS runners. Build universal, run tests, produce a `.dmg`,
 attach to a GitHub Release on tag.
 
+*(Amended 2026-08-16, owner's direction — "don't burn any actions". Built, and narrower
+than the sentence above implies. See decision 19 in CLAUDE.md.)* Actions bills in
+quota-minutes — wall clock times a runner multiplier, and macOS is the 10x tier — so a
+macOS-only project has no cheap runner leg to fall back on. The triggers are therefore
+deliberately minimal, and a reader who "fixes" the missing push trigger will be undoing
+the design:
+
+- `.github/workflows/release.yml` — a `vYY.M.D` tag, or manual dispatch. Tests, builds
+  universal, verifies both slices and the signature are really present, and attaches the
+  `.dmg` to a **draft** release. Dispatch runs upload an artifact and create no release,
+  so the pipeline can be proven without spending a version number.
+- `.github/workflows/ci.yml` — pull requests and manual dispatch only. **No push
+  trigger.** Ordinary work costs nothing.
+- `.githooks/pre-push` → `Scripts/ci-local.sh` — the routine gate, free, on the developer's
+  machine. Enable per clone with `git config core.hooksPath .githooks`.
+
+The local hook carries real weight here rather than being a convenience, because the
+development machine *is* the target platform: it checks the actual thing rather than a
+stand-in. The rented Mac earns its multiplier on two jobs only — building what ships, and
+a clean-checkout second opinion with the full Xcode decision 9 keeps off this machine.
+
+Every job carries `timeout-minutes`. The default is six hours, which at the macOS
+multiplier is 3,600 quota-minutes — nearly double a private repo's monthly allowance,
+from a single run that hangs. Public repos are unmetered on every platform, so this
+entire concern disappears when the repository goes public.
+
+Measured, so the budget is not over-designed for: a full universal build with `.dmg` takes
+about 71s locally and 90s on a runner, so a release costs roughly 15 quota-minutes. Having
+no dependencies is why.
+
 *(Amended 2026-08-15, owner's ruling: a `.dmg`, not the zipped `.app` this section
 originally specified.)* The image holds the app and a symlink to `/Applications` — the
 drag-across layout people expect. A zip tends to leave the app running out of
@@ -382,10 +412,25 @@ outright. `Scripts/bundle.sh release` therefore builds each architecture separat
 `--triple` — cross-compiling to x86_64 works fine under CLT — and joins them with `lipo`.
 Signing happens after the join, never before: lipo'ing two signed slices invalidates both.
 
-**Signing:** ad-hoc only — `codesign --force --deep --sign -`. This is free and requires
-no Apple Developer account. It is also **not optional**: Apple Silicon refuses to
-execute arm64 binaries with no signature at all, killing the process rather than
-warning. Ad-hoc signing satisfies that requirement while leaving the app unnotarized.
+**Signing:** ad-hoc only. This is free and requires no Apple Developer account. It is
+also **not optional**: Apple Silicon refuses to execute arm64 binaries with no signature
+at all, killing the process rather than warning. Ad-hoc signing satisfies that
+requirement while leaving the app unnotarized.
+
+*(Amended 2026-08-16.)* This section specified `codesign --force --deep --sign -`, which
+is not what `Scripts/bundle.sh` runs and should not be. `--deep` is deprecated by Apple
+and wrong here regardless — there are no nested bundles to descend into — and the flag
+that actually matters was missing: `--entitlements`, without which the sandbox and the
+network-client entitlement never reach the binary and the Keychain stops working. The
+real command is:
+
+```
+codesign --force --sign - --entitlements Support/ADIFEditor.entitlements --timestamp=none
+```
+
+Nothing is notarized and nothing will be; there is no paid Apple Developer account and
+none is planned. A consequence worth protecting: **this repository contains no secrets
+and needs none** — no certificates, no API keys, nothing that complicates going public.
 
 **What users will see:** Gatekeeper blocks the app as being from an unidentified
 developer. On macOS 15 and later the old right-click-Open bypass no longer works; the
@@ -419,6 +464,13 @@ validation panel, statistics.
 
 **M4 — Polish.** App icon, README with screenshots, CI release pipeline, whatever parity
 gaps have proven to matter in use.
+
+*(Progress, 2026-08-16.)* The app icon and the CI release pipeline are done, out of
+sequence — both were built before M2 and M3 finished, because a shipped app that looks
+unfinished and a release path that has never run were the two things standing between the
+owner and installing his own work. `v26.8.16` is tagged and built. Still outstanding in
+M4: README screenshots. Still outstanding before it: M2's save-selection-as-new-file and
+M3's replace. M2's column filters are **not** coming — see decision 18.
 
 **QRZ lookup (§10.4)** was asked for after M1 and does not belong to a milestone. It
 brings Preferences with it — M4's item, pulled forward because credentials need

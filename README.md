@@ -126,7 +126,24 @@ Scripts/bundle.sh            # debug, your architecture — for development
 Scripts/bundle.sh release    # universal arm64 + x86_64, plus the .dmg
 ```
 
-Both land in `.build/`. Either can be dragged to `/Applications`.
+Both land in `.build/`. Either can be dragged to `/Applications`. The app you build
+yourself is not quarantined, so none of the first-launch steps above apply to it.
+
+The icon is generated during the bundle step from `Support/Icon/AppIcon-1024.png` using
+`sips` and `iconutil`, both of which ship with macOS. There is no committed `.icns`, so
+the PNG is the only thing to change if you want a different icon.
+
+If you are working on the project rather than just building it once, enable the pre-push
+hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+It runs `Scripts/ci-local.sh` — a build and the full test suite — before every push. This
+is the project's primary check. Continuous integration deliberately does not run on
+pushes to `main`, so nothing on the server will catch what the hook misses until a release
+is built.
 
 ## License
 

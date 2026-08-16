@@ -233,8 +233,8 @@ it does for a real app icon rather than a generic fallback.
   for macOS 15+, which the release notes initially were not. It had claimed "no network
   connections of any kind" for a day after QRZ landed — worth re-reading it whenever a
   capability changes, since it is the file that goes public first and the easiest one to
-  forget. **It still says no release has been published; that is now wrong** and is the
-  first thing to fix there.
+  forget. Its "no release has been published yet" line is **still accurate** — `v26.8.16`
+  is a draft, and a draft is not published. Revisit that sentence when one is, not before.
 
 **Where to pick up (paused 2026-08-16).** Working tree clean, five commits that day, all
 pushed. `.build/ADIF Editor.app` is a *release* bundle stamped 26.8.16, and **it was left
@@ -256,7 +256,6 @@ The open build choices, roughly in order of how much they are worth:
   times without a yes. Grows more expensive each session; decision 18 means DESIGN.md
   describes a feature that was built and rejected, and §12 now describes a pipeline whose
   triggers decision 19 narrowed.
-- **README's release section.** It says no release has been published. One tag exists.
 - **Save selection as a new file** — the last of M2 — and **M3's replace**.
 - **Bump `actions/checkout` and `actions/upload-artifact` to `@v5`.** Both target Node 20,
   which GitHub has deprecated; runs are being forced onto Node 24 and warn each time.
