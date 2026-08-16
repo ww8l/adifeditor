@@ -70,6 +70,35 @@ echo "Assembling bundle…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
+# The .icns is generated here rather than committed, so Support/Icon/AppIcon-1024.png is
+# the single source of truth and a derived binary can never drift from it. Both tools
+# ship with macOS — `sips` and `iconutil` are in /usr/bin, not inside Xcode.app — so this
+# costs nothing under decision 9 and runs headless in CI.
+#
+# The @2x entries are not decoration: macOS picks the representation by point size, and a
+# Retina Dock asks for 512x512@2x. Omit them and the icon renders from a smaller bitmap
+# and looks soft on exactly the displays this app is used on.
+echo "Building icon…"
+ICONSET="$ROOT/.build/AppIcon.iconset"
+rm -rf "$ICONSET"
+mkdir -p "$ICONSET"
+
+for spec in \
+    "16 icon_16x16" "32 icon_16x16@2x" \
+    "32 icon_32x32" "64 icon_32x32@2x" \
+    "128 icon_128x128" "256 icon_128x128@2x" \
+    "256 icon_256x256" "512 icon_256x256@2x" \
+    "512 icon_512x512" "1024 icon_512x512@2x"
+do
+    px="${spec% *}"
+    name="${spec#* }"
+    sips -z "$px" "$px" "$ROOT/Support/Icon/AppIcon-1024.png" \
+        --out "$ICONSET/$name.png" >/dev/null
+done
+
+iconutil --convert icns "$ICONSET" --output "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
+
 cp "$BIN" "$APP/Contents/MacOS/ADIFEditor"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"

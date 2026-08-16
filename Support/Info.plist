@@ -10,6 +10,8 @@
 	<string>com.ww8l.adifeditor</string>
 	<key>CFBundleExecutable</key>
 	<string>ADIFEditor</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -25,8 +27,11 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Tim Annable. MIT licensed.</string>
 
-	<!-- No NSAppTransportSecurity key, no URL schemes, no services: the app makes no
-	     network connections of any kind (§6.5), so it has nothing to configure. -->
+	<!-- No NSAppTransportSecurity key, no URL schemes, no services. The one connection
+	     the app can make is the QRZ lookup (§6.5 as amended, §10.4), which is plain HTTPS
+	     to a single host the user opts into by entering credentials — ATS permits that
+	     with no exception declared, and relaxing ATS is exactly what must never happen
+	     here. Nothing else needs configuring. -->
 
 	<key>CFBundleDocumentTypes</key>
 	<array>
