@@ -361,8 +361,26 @@ guarantee for free: that a lookup proposes fills and never overwrites an existin
 
 ## 12. Build and distribution
 
-**CI:** GitHub Actions on macOS runners. Build universal, run tests, produce a zipped
-`.app`, attach to a GitHub Release on tag.
+**CI:** GitHub Actions on macOS runners. Build universal, run tests, produce a `.dmg`,
+attach to a GitHub Release on tag.
+
+*(Amended 2026-08-15, owner's ruling: a `.dmg`, not the zipped `.app` this section
+originally specified.)* The image holds the app and a symlink to `/Applications` — the
+drag-across layout people expect. A zip tends to leave the app running out of
+`~/Downloads`, which for a sandboxed app puts its container somewhere the user will
+never find. Deliberately a plain image: a custom background and fixed icon positions
+need Finder scripting and a GUI session, which CI does not have. `hdiutil` builds it and
+ships with macOS, so unlike the universal build this adds no Xcode dependency.
+
+Note that the container is not what makes the app hard to install — the signature is. A
+`.dmg` and a zip are quarantined identically and hit the same wall described below.
+
+**Building universal without Xcode.** §5 asks for arm64 + x86_64 and decision 9 rules out
+Xcode, and those two collided: SwiftPM's `--arch arm64 --arch x86_64` delegates to
+`xcbuild`, which lives inside Xcode.app and is absent from Command Line Tools, so it fails
+outright. `Scripts/bundle.sh release` therefore builds each architecture separately with
+`--triple` — cross-compiling to x86_64 works fine under CLT — and joins them with `lipo`.
+Signing happens after the join, never before: lipo'ing two signed slices invalidates both.
 
 **Signing:** ad-hoc only — `codesign --force --deep --sign -`. This is free and requires
 no Apple Developer account. It is also **not optional**: Apple Silicon refuses to

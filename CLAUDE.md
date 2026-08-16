@@ -13,7 +13,7 @@ a gap to fix (see "Decisions taken" below).
 swift build                     compile
 Scripts/test.sh                 run the suite
 Scripts/bundle.sh               build .build/ADIF Editor.app and launch it from there
-Scripts/bundle.sh release       universal arm64 + x86_64, what ships
+Scripts/bundle.sh release       universal arm64 + x86_64, plus the .dmg — what ships
 ```
 
 `swift build` alone produces a bare executable, which is not a Mac app: the document
@@ -104,6 +104,17 @@ coming** — see decision 18.
   changes with a real `.app`, not a command-line binary.
 - **`log` is shadowed in this zsh.** Use `/usr/bin/log` for unified-logging queries. The
   sandbox also blocks `/tmp`, so an app-side debug sink has to write into the container.
+- **SwiftPM's `--arch arm64 --arch x86_64` needs Xcode and cannot work here.** It shells
+  out to `xcbuild`, which lives inside Xcode.app; under CLT it fails with "xcbuild
+  executable ... does not exist". §5's universal requirement and decision 9's no-Xcode
+  ruling were quietly incompatible from M1 until this was found on 2026-08-15 — the
+  release path had been written, documented as "what ships", and never once run. Two
+  `--triple` builds joined with `lipo` get there instead; cross-compiling to x86_64 is
+  fine under CLT. Sign *after* lipo, never before: joining two signed slices invalidates
+  both signatures.
+- **A whole documented command can be dead.** The lesson generalises past this one bug: if
+  a script path has never been executed, it does not work until proven otherwise, however
+  carefully it was written.
 
 **Open items:**
 
