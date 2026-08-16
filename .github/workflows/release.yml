@@ -116,15 +116,39 @@ jobs:
           # A block scalar rather than a heredoc inside the run script: YAML owns the
           # line breaks, the shell only expands one variable, and there is no nesting of
           # quoting rules to get wrong on a run that costs a version number to retry.
+          # Keep this in step with README.md's "First launch: macOS will block it".
+          # The control-click -> Open shortcut that the sibling project's README still
+          # documents was removed in macOS 15, so it is deliberately not the headline
+          # instruction here: this app supports macOS 14 and up, and telling the majority
+          # of users to do something that silently fails is worse than saying nothing.
           NOTES: |
             Universal build for Apple Silicon and Intel. Requires macOS 14 or later.
 
-            This build is ad-hoc signed, not notarized, so macOS refuses to open it on
-            first launch. Right-click the app and choose **Open**, then confirm — after
-            that it launches normally.
+            ### First launch: macOS will block it
 
-            **Your log files are never modified.** The only thing that writes to the file
-            you opened is Save; POTA stamping and splitting always write new files.
+            Expected, and not a sign anything is wrong with the download. This build is
+            **ad-hoc signed and not notarized** — notarizing requires a paid Apple
+            Developer account this project does not have — so macOS treats it as coming
+            from an unidentified developer.
+
+            To get past it once:
+
+            1. Double-click **ADIF Editor**. macOS blocks it — dismiss the warning.
+            2. Open **System Settings › Privacy & Security**.
+            3. In the **Security** section, a message names ADIF Editor as blocked, with
+               an **Open Anyway** button. Click it, confirm, and authenticate if asked.
+
+            You only do this once. On macOS 14 you can instead control-click the app and
+            choose **Open**; that shortcut was removed in macOS 15, which is why the route
+            above is the one documented. If you prefer one command:
+
+                xattr -dr com.apple.quarantine "/Applications/ADIF Editor.app"
+
+            ### Your log files are never modified
+
+            The only thing that writes to the file you opened is Save. POTA stamping and
+            splitting always write new files, and an unedited file written back out is
+            byte-identical to what came in.
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --draft \
