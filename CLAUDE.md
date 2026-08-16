@@ -142,22 +142,45 @@ coming** — see decision 18.
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
 - **DESIGN.md is amended but still behind.** §6.5, §10.4, §3, §5, §7, §11, §13 and §14
-  were brought up to date when QRZ landed. The eighteen decisions below still live only
-  in this file, and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2
-  say in plain words — a reader of DESIGN.md alone would build the wrong app, and decision
-  18 now means they would build a whole feature that was rejected. It also does not mention
-  dedupe or find. The owner has been offered a fold-in three times and hasn't said yes.
+  were brought up to date when QRZ landed; §12 was amended on 2026-08-15 for the `.dmg`
+  and the xcbuild collision. The eighteen decisions below still live only in this file,
+  and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2 say in plain
+  words — a reader of DESIGN.md alone would build the wrong app, and decision 18 now means
+  they would build a whole feature that was rejected. It also does not mention dedupe or
+  find. The owner has been offered a fold-in three times and hasn't said yes.
+- **README is current as of 2026-08-15** and is the one document safe to hand a stranger.
+  Install section written, feature list matches what exists, and the byte-identity
+  guarantee is stated with its one exception. It had claimed "no network connections of
+  any kind" for a day after QRZ landed — worth re-reading it whenever a capability
+  changes, since it is the file that goes public first and the easiest one to forget.
 
-**Where to pick up (paused 2026-08-15).** Working tree clean, everything committed,
-nothing pushed. The build is current and `.build/ADIF Editor.app` is signed with the
-network entitlement.
+**Where to pick up (paused 2026-08-15, end of a long session).** Working tree clean, six
+commits that day, nothing pushed. `.build/ADIF Editor.app` is the *debug* bundle, signed
+with the network entitlement and left running against the FT8CN fixture.
 
-Nothing is waiting on the owner. The live QRZ lookup was made and worked, and ⌘F find
-landed after it and he has used it.
+Nothing is waiting on the owner. What landed on 2026-08-15, in order: the live QRZ lookup
+finally ran against the real service and worked; a column-filter system was built and then
+deleted in favour of ⌘F find (decision 18); `Scripts/bundle.sh release` was found to have
+never worked and was fixed, and now also produces the `.dmg`; the README's install section
+was written and its stale claims corrected.
 
-The open build choices: what remains of M2 (save selection as a new file — column filters
-are dropped, decision 18), M3's replace, the DESIGN.md fold-in, or the repo's
-public/private question.
+The open build choices, roughly in order of how much they are worth:
+
+- **CI (§12, M4).** There is no `.github/` at all. This is now the most tractable it has
+  ever been — `bundle.sh release` works, so a workflow has something real to call, and
+  GitHub's runners have the Xcode that this machine lacks. Build, test, `.dmg`, attach to
+  a Release on tag.
+- **An app icon (M4).** `Contents/Resources` is created and empty. The last visible thing
+  missing before the app looks finished.
+- **The DESIGN.md fold-in.** Offered three times, never accepted. Grows more expensive
+  each session; decision 18 in particular means DESIGN.md now describes a feature that was
+  built and rejected.
+- **Save selection as a new file** — the last of M2 — and **M3's replace**.
+
+One process note worth carrying forward: `osascript ... to quit` was used on the app while
+the owner had unsaved QRZ edits in it, which parked the whole thing on a save-changes sheet
+and blocked Apple Events until he answered. Check for unsaved work, or just ask him to
+quit it, before rebuilding a bundle he is using.
 
 ## Core principles (DESIGN.md §6) — invariants
 
