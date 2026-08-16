@@ -26,16 +26,19 @@ explicitly. The script does that and is a no-op difference under a full Xcode in
 
 ## Where things stand
 
-*Last updated 2026-08-14.*
+*Last updated 2026-08-15.*
 
 **M1 is complete and the owner has used it.** The QRZ lookup (§10.4) landed after it,
 on the owner's request, and is the reason this app can now reach the network at all.
-169 tests across five suites, all green and all mutation-checked rather than merely
+**The live QRZ lookup has now run against the real service, on the owner's subscription,
+and worked** (2026-08-15) — the fake-transport-only caveat that stood here is retired.
+Find (⌘F) followed. 183 tests, all green and all mutation-checked rather than merely
 observed passing.
 
 ```
 Sources/ADIFKit/   ADIFField, ADIFRecord, ADIFDocument, ADIFScanner, ADIFParser,
-                   ADIFWriter, ADIFEditing (what an edit means), ADIFDuplicates
+                   ADIFWriter, ADIFEditing (what an edit means), ADIFDuplicates,
+                   ADIFFind (matching and wrapping)
 Sources/POTAKit/   ParkReference, POTAStamp, POTAFilename
 Sources/QRZKit/    QRZTransport (the seam), QRZSession, QRZCallsign, QRZResponseParser,
                    QRZFieldMapping, QRZLookup, QRZBatch, QRZError
@@ -43,20 +46,21 @@ Sources/ADIFEditor/ main, AppDelegate, MainMenu,
                    Model/{LogDocument, Preferences, Keychain},
                    UI/{LogWindowController, GridViewController, GridClipboard,
                    POTACommands, DedupeCommand, QRZCommand, QRZProgressSheet,
-                   PreferencesWindowController, SheetLayout, ParseWarningText}
+                   PreferencesWindowController, SheetLayout, ParseWarningText,
+                   FindBar}
 Support/           Info.plist, ADIFEditor.entitlements
 Scripts/           test.sh (the suite), bundle.sh (builds and signs ADIF Editor.app)
-Tests/             ADIFKitTests (round trip, parser, editing, duplicates), POTAKitTests,
-                   QRZKitTests (responses, session, lookup, batch)
+Tests/             ADIFKitTests (round trip, parser, editing, duplicates, find),
+                   POTAKitTests, QRZKitTests (responses, session, lookup, batch)
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
 fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
 ```
 
 The app opens a log, edits cells, sorts on any header, selects/cuts/copies/pastes/deletes
-rows, stamps POTA references into new files, finds duplicates, and fills station details
-from QRZ. A titlebar banner reports anything the parser had to recover from. All of it
-verified running against the owner's real log, not just compiled — except the live QRZ
-request, which needs his subscription and password.
+rows, stamps POTA references into new files, finds duplicates, finds text (⌘F), and fills
+station details from QRZ. A titlebar banner reports anything the parser had to recover
+from. All of it verified running against the owner's real log, not just compiled — the
+live QRZ request included, as of 2026-08-15.
 
 **Nothing in the app ever writes to the file that was opened** except Save. The POTA
 commands write new files only (decision 15), autosave-in-place is off and must stay off,
@@ -81,7 +85,8 @@ panel in spirit, but it deletes rather than advises, so it shows every row befor
 any. The QRZ lookup *was* written into DESIGN.md as §10.4 when it was built.
 
 Still not built, deliberately: no CI workflow (§12's GitHub Actions pipeline is M4), no
-app icon, no column filters or find/replace (M2/M3).
+app icon, no replace, no save-selection-as-new-file (M2/M3). **Column filters are not
+coming** — see decision 18.
 
 **Things learned the hard way, worth not relearning:**
 
@@ -106,32 +111,32 @@ app icon, no column filters or find/replace (M2/M3).
   `ww8l`. The owner was asked whether to create `adif-editor` public or private and
   hasn't decided; do not push without an answer. Public means the FT8CN fixture's real
   callsigns go public, which §11 sanctions but is his call.
-- **The live QRZ path has never run.** Every test uses a fake transport. The canned XML is
-  built from QRZ's published format, not captured from the service, so any drift between
-  their documentation and their behaviour is invisible to the suite. Replace the fixtures
-  with real captures the first time a subscription is at hand, and scrub the session key
-  before committing them.
+- **The QRZ fixtures are still synthetic**, even though the live path now works. The canned
+  XML is built from QRZ's published format, not captured from the service, so any drift
+  between their documentation and their behaviour remains invisible to the suite. The
+  lookup running successfully once says the happy path is right; it says nothing about the
+  error and edge responses. Capture real ones next time a lookup is being made, and scrub
+  the session key before committing them.
 - **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
 - **DESIGN.md is amended but still behind.** §6.5, §10.4, §3, §5, §7, §11, §13 and §14
-  were brought up to date when QRZ landed. The seventeen decisions below still live only
-  in this file, and four of them (2, 14, 15, 16) contradict what §9 and §10.2 say in plain
-  words — a reader of DESIGN.md alone would build the wrong app. It also does not mention
-  dedupe. The owner has been offered a fold-in three times and hasn't said yes.
+  were brought up to date when QRZ landed. The eighteen decisions below still live only
+  in this file, and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2
+  say in plain words — a reader of DESIGN.md alone would build the wrong app, and decision
+  18 now means they would build a whole feature that was rejected. It also does not mention
+  dedupe or find. The owner has been offered a fold-in three times and hasn't said yes.
 
-**Where to pick up (paused 2026-08-14).** Working tree clean, everything committed,
+**Where to pick up (paused 2026-08-15).** Working tree clean, everything committed,
 nothing pushed. The build is current and `.build/ADIF Editor.app` is signed with the
 network entitlement.
 
-The one thing waiting on the owner is the **first live QRZ lookup** — Settings (⌘,),
-enter his subscription credentials, then select rows and hit QRZ. Every code path around
-it has been exercised with a fake transport; the real request has never been made. If it
-misbehaves, suspect the canned fixtures before suspecting the logic, and capture the real
-response to replace them.
+Nothing is waiting on the owner. The live QRZ lookup was made and worked, and ⌘F find
+landed after it and he has used it.
 
-After that the open build choices are unchanged: M2 (column filters, save selection as a
-new file), the DESIGN.md fold-in, or the repo's public/private question.
+The open build choices: what remains of M2 (save selection as a new file — column filters
+are dropped, decision 18), M3's replace, the DESIGN.md fold-in, or the repo's
+public/private question.
 
 ## Core principles (DESIGN.md §6) — invariants
 
@@ -324,6 +329,26 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     individually — collectively they are what was traded for it. Anything wanting a
     *second* network destination is a new decision needing the same conversation, not an
     extension of this one.
+
+18. **Find, not filters. §10.1's column filters are dropped.** *(2026-08-15, owner's
+    ruling.)* A filter bar was built first — per-column conditions, a value picker, tokens
+    for active terms, and the row-to-record mapping that hiding rows forces on every
+    operation in the app. The owner's verdict on seeing it: *"I don't need all that
+    filtering, you're making it more complex than I asked."* He asked for ⌘F instead. All
+    of it was deleted; `ADIFFind` is about seventy lines and hides nothing.
+
+    What this gives up is real and should not be discovered at a Field Day. §10.1 names
+    filtering as the primitive behind "filter on `OPERATOR`, select the rows that aren't
+    yours, delete them", and find cannot do that — it moves the selection to one row at a
+    time, so there is nothing to ⌘A and delete. If that workflow ever actually comes up,
+    the answer is *not* to rebuild the filter bar: sort on `OPERATOR`, which the grid
+    already does, and the rows that aren't yours are contiguous and selectable in one
+    drag. That is decision 12's stance applied to the case decision 12 was written for.
+
+    The general lesson, which is the more useful half: the spec asking for a feature is not
+    a reason to build the largest version of it. §10.1 said "filter on any column by value"
+    and got a multi-column conjunctive query builder. Build the small thing, show it, and
+    let him ask for more.
 
 ## Identity
 
