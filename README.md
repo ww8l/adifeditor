@@ -20,7 +20,14 @@ ADIF Editor makes that two button presses. It also does the general grid editing
 sometimes needs — deleting the contacts that weren't part of the activation, fixing a
 mistyped callsign — without damaging anything else in the file.
 
-It is not a logger. It does not upload. It makes no network connections of any kind.
+It is not a logger, and it never uploads your log anywhere — you upload to POTA
+yourself.
+
+It makes exactly one kind of network connection: a QRZ callsign lookup, to fill in
+station details you would otherwise type by hand. It happens only when you invoke it,
+only if you have entered QRZ credentials, and it sends one callsign — never your log,
+never a file. With no credentials stored, the app never opens a connection at all. There
+is no telemetry, no update check, and no analytics.
 
 ## Requirements
 
@@ -40,13 +47,65 @@ Tests use swift-testing. `Scripts/test.sh` wraps `swift test` with the search pa
 `Testing.framework` needs when building against Command Line Tools without a full
 Xcode install; with Xcode present, plain `swift test` also works.
 
+`swift build` compiles the code but does not produce a runnable Mac app — see
+[Building the app from source](#building-the-app-from-source) below for that.
+
 ## Installing
 
-*(To be written — see DESIGN.md §12. The app is ad-hoc signed and not notarized, so
-Gatekeeper will block it on first launch and the README will need to document the
-"Open Anyway" path through System Settings › Privacy & Security, along with the
-`xattr -dr com.apple.quarantine` alternative. Users who would rather not run an
-unsigned binary can build it themselves — that is the intended answer.)*
+**No release has been published yet.** Until one is, building from source (below) is the
+only way to get the app. When releases begin, they will be `.dmg` files on the
+[Releases](../../releases) page.
+
+Open the `.dmg` and drag **ADIF Editor** onto the **Applications** shortcut beside it.
+
+### First launch: macOS will block it
+
+It will. This is expected, and it is not a sign that anything is wrong with the download.
+
+ADIF Editor is **ad-hoc signed and not notarized**. Notarizing requires a paid Apple
+Developer account, which this project does not have. macOS therefore treats the app as
+coming from an unidentified developer and refuses to open it the first time.
+
+You have three ways past it. Pick one.
+
+**1. Open Anyway** (no Terminal required)
+
+1. Double-click ADIF Editor. macOS blocks it — dismiss the warning.
+2. Open **System Settings › Privacy & Security**.
+3. Scroll to the **Security** section. A message names ADIF Editor as having been
+   blocked, with an **Open Anyway** button. Click it.
+4. Confirm, and authenticate if asked.
+
+You only do this once. On macOS 14 you can instead control-click the app and choose
+**Open**; that shortcut was removed in macOS 15, which is why the route above is the one
+documented here.
+
+**2. Remove the quarantine flag** (one command)
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/ADIF Editor.app"
+```
+
+Then open it normally.
+
+**3. Build it yourself**
+
+If you would rather not run a binary you did not build — a reasonable position, and the
+intended answer to the signing question — see below. The app you build locally is not
+quarantined, so none of this applies to it.
+
+### Building the app from source
+
+`swift build` alone produces a bare executable, which is not a Mac app: the document type
+associations live in `Info.plist`, and Apple Silicon refuses to run an unsigned arm64
+binary at all. `Scripts/bundle.sh` assembles the bundle and ad-hoc signs it.
+
+```sh
+Scripts/bundle.sh            # debug, your architecture — for development
+Scripts/bundle.sh release    # universal arm64 + x86_64, plus the .dmg
+```
+
+Both land in `.build/`. Either can be dragged to `/Applications`.
 
 ## License
 
