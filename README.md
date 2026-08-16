@@ -16,9 +16,30 @@ Every activation therefore requires the same manual edit: add a column, fill it 
 the park reference on every row, save under a specific filename. Activations from
 multiple parks at once ("n-fers") require that once per park, into separate files.
 
-ADIF Editor makes that two button presses. It also does the general grid editing a log
-sometimes needs — deleting the contacts that weren't part of the activation, fixing a
-mistyped callsign — without damaging anything else in the file.
+ADIF Editor makes that one button press — one park or ten, the same command, always
+writing new files and never touching the log that came off the radio.
+
+Around that it does the editing a log actually needs:
+
+- **Grid editing.** Every field of every QSO in a spreadsheet, with full undo. Columns
+  sort on any header.
+- **Row selection and deletion.** Real logs accumulate several sessions; trimming to the
+  contacts that were part of the activation is part of preparing the upload. Cut, copy
+  and paste move whole QSOs, as ADIF text.
+- **Find duplicates.** QSOs that repeat, every one shown before any is removed.
+- **Fill from QRZ.** Name, location and zone fields for callsigns you would otherwise
+  type by hand. Empty cells only — it never overwrites something you entered.
+- **Find (⌘F).** Across every column at once.
+
+And underneath all of it, the guarantee the parser is built around: **a file opened and
+saved without edits is byte-identical to the one that came in.** Not merely
+field-preserving — identical, down to field-name casing, zero-length fields, line
+endings and header bytes. Vendor extensions and fields the app has never heard of
+survive untouched, because nothing it does not understand is ever rewritten.
+
+The single exception is a field whose declared length is wrong: that gets written back
+correct, and the app tells you it did. Reproducing it faithfully would be preserving
+corruption rather than preserving data.
 
 It is not a logger, and it never uploads your log anywhere — you upload to POTA
 yourself.
