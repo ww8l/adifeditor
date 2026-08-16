@@ -118,16 +118,22 @@ coming** — see decision 18.
 
 **Open items:**
 
-- **The repo is local only, and going public later.** No remote, nothing pushed. `gh` is
-  authenticated as `ww8l`. The owner ruled on 2026-08-15: **public, but not yet.** Timing
-  is his; do not create the remote or push without being asked.
+- **The repo is on GitHub, private, and going public later.**
+  `https://github.com/ww8l/adifeditor`, created 2026-08-16 at the owner's request, `main`
+  tracking `origin/main`, all 27 commits pushed. `gh` is authenticated as `ww8l`. He asked
+  for **private for now, public later** — the flip is his call and his timing; don't run
+  `gh repo edit --visibility public` without being asked.
 
-  Two things follow from "later, but public". First, **history is published too** — a
+  **The history scan is the gate on that flip, and it has not been re-run since
+  2026-08-15.** Private means a leaked credential is still recoverable by rewriting
+  history; public means it is not. So the scan is owed *before* the visibility change, not
+  before the push. Two things follow. First, **history is published too** — a
   credential committed today is still in the log after it is deleted tomorrow, and
   rewriting history is far worse than never committing it. The history was scanned on
   2026-08-15 and is clean: every `password`/`sessionKey` hit is a parameter name, and the
   one key-shaped hex string in `QRZFakes.swift` is invented, not captured. Re-check before
-  pushing, especially if the QRZ fixtures have been replaced with real captures by then.
+  going public, especially if the QRZ fixtures have been replaced with real captures by
+  then.
 
   Second, the FT8CN fixture is fine to publish. It holds callsigns, four-character grid
   squares, dates, signal reports and FT8CN's own distance comments — no names, addresses
