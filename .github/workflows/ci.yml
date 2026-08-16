@@ -1,0 +1,59 @@
+name: CI
+
+# Deliberately dormant. Nothing here fires on a push to main.
+#
+# Actions bills in quota-minutes — wall-clock times a runner multiplier — and macOS is
+# the 10x tier. This project is macOS-only, so unlike a cross-platform repo there is no
+# cheap runner leg to fall back on: every hosted run is a 10x run. What makes that
+# affordable is that the development machine *is* the target platform, so Scripts/
+# ci-local.sh checks the real thing rather than a stand-in, and .githooks/pre-push runs
+# it on every push for free.
+#
+# So the routine gate is local and the hosted runner is reserved for the two jobs it can
+# do better: release.yml builds what ships, and this workflow is here for a pull request
+# or a deliberate button press — a clean checkout on a machine with full Xcode, which is
+# the one thing the dev machine cannot self-check (decision 9).
+#
+# Keep the step list in sync with Scripts/ci-local.sh.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run stops billing the moment it is replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: macOS
+    runs-on: macos-latest
+
+    # Not a guess at how long the job takes — a cap on how much a *stuck* job can cost.
+    # The default is 6 hours, which at the 10x multiplier is 3,600 quota-minutes: nearly
+    # double the monthly allowance, from one run that never finished.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Identify the toolchain
+        run: |
+          swift --version
+          echo "developer dir: $(xcode-select -p)"
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: Scripts/test.sh
+
+      # Not redundant with the build: the bundle is where the Info.plist, the
+      # entitlements and the ad-hoc signature come together, and a broken one still
+      # compiles perfectly (§12).
+      - name: Bundle
+        run: Scripts/bundle.sh
+
+      - name: Verify the bundle
+        run: codesign --verify --strict ".build/ADIF Editor.app"

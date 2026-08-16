@@ -1,0 +1,133 @@
+name: Release
+
+# Builds the universal .app, packages the .dmg, and attaches it to a DRAFT release.
+#
+# Two triggers, and the difference matters:
+#
+#   * A vYY.M.D tag — the real thing. Publishes a draft release with the .dmg attached.
+#   * workflow_dispatch — a dry run. Builds and verifies exactly the same way, but
+#     uploads the .dmg as a workflow artifact and creates no release, so the pipeline can
+#     be proven without spending a version number on it.
+#
+# Prove it with a dispatch before the first tag. A workflow debugged by pushing tags
+# costs a billed run and a burned version per mistake, and the tag cannot be reused.
+#
+# Versions are CalVer, matching the other project on this machine: vYY.M.D, no zero
+# padding — v26.8.3 for August 3rd, v26.8.13 for the 13th. The version is not validated
+# against the runner's date on purpose: a release cut on one day and tagged the next is
+# normal and should not fail the build.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Releases are not superseded the way CI runs are — cancelling one halfway leaves a draft
+# with no asset attached. Queue instead.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: macOS universal
+    runs-on: macos-latest
+
+    # A cap on a stuck job, not an estimate. The full release build is ~71s locally.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Identify the toolchain
+        run: |
+          swift --version
+          echo "developer dir: $(xcode-select -p)"
+
+      - name: Derive the version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            # Dry run. Deliberately not a plausible release number, so a dispatch build
+            # can never be mistaken for one if the .dmg escapes into the world.
+            version="0.0.0-dev"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building version $version"
+
+      # Before the build, not after: a release that ships a failing suite is worse than
+      # one that never gets built.
+      - name: Test
+        run: Scripts/test.sh
+
+      - name: Build the universal app and the .dmg
+        env:
+          MARKETING_VERSION: ${{ steps.version.outputs.version }}
+        run: Scripts/bundle.sh release
+
+      # §5 asks for universal. The lipo path that produces it is easy to break in a way
+      # that still yields a working app on whichever architecture the runner happens to
+      # be — which is exactly how the release path went unnoticed-broken once before.
+      - name: Verify both architectures and the signature
+        run: |
+          binary=".build/ADIF Editor.app/Contents/MacOS/ADIFEditor"
+          archs="$(lipo -archs "$binary")"
+          echo "architectures: $archs"
+          for required in arm64 x86_64; do
+            case " $archs " in
+              *" $required "*) ;;
+              *) echo "::error::$required missing from the universal binary"; exit 1 ;;
+            esac
+          done
+          codesign --verify --strict ".build/ADIF Editor.app"
+          echo "shipping version: $(/usr/libexec/PlistBuddy \
+            -c 'Print :CFBundleShortVersionString' \
+            ".build/ADIF Editor.app/Contents/Info.plist")"
+
+      - name: Name the asset
+        id: asset
+        run: |
+          asset="ADIF-Editor-${{ steps.version.outputs.version }}-universal.dmg"
+          cp ".build/ADIF Editor.dmg" "$asset"
+          echo "path=$asset" >> "$GITHUB_OUTPUT"
+          ls -lh "$asset"
+
+      - name: Upload the dry-run build
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: adif-editor-dry-run
+          path: ${{ steps.asset.outputs.path }}
+          retention-days: 7
+
+      # Draft, never published outright: it leaves room to check the .dmg on a real Mac
+      # before anyone can download it, and un-drafting costs nothing where re-running the
+      # build to replace a bad published asset costs another 10x run.
+      - name: Publish the draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A block scalar rather than a heredoc inside the run script: YAML owns the
+          # line breaks, the shell only expands one variable, and there is no nesting of
+          # quoting rules to get wrong on a run that costs a version number to retry.
+          NOTES: |
+            Universal build for Apple Silicon and Intel. Requires macOS 14 or later.
+
+            This build is ad-hoc signed, not notarized, so macOS refuses to open it on
+            first launch. Right-click the app and choose **Open**, then confirm — after
+            that it launches normally.
+
+            **Your log files are never modified.** The only thing that writes to the file
+            you opened is Save; POTA stamping and splitting always write new files.
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "ADIF Editor ${{ steps.version.outputs.version }}" \
+            --notes "$NOTES" \
+            "${{ steps.asset.outputs.path }}"

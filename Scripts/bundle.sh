@@ -13,6 +13,11 @@
 #   Scripts/bundle.sh release    universal arm64 + x86_64, plus the .dmg — what ships (§5)
 #
 # Both land in .build/ and are not tracked.
+#
+# Optional: MARKETING_VERSION=26.8.16 stamps that version into the bundled Info.plist
+# instead of the value checked into Support/Info.plist. The release workflow sets it from
+# the git tag, so the shipped .app carries the version it was tagged with and nobody has
+# to remember to bump a plist by hand. Unset, the checked-in value is used untouched.
 
 set -eu
 
@@ -68,6 +73,22 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ADIFEditor"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+
+# Version stamped into the copy, never back into Support/Info.plist: the source file
+# stays at whatever the working tree says, so a release build leaves no dirt behind and
+# the git tag is the single source of truth for what shipped.
+#
+# Both keys, not just the display string. CFBundleVersion is what macOS compares to
+# decide which of two builds is newer, and it is hardcoded to 1 in Support/Info.plist —
+# ship that unchanged and every release claims to be the same build. CalVer sorts
+# correctly there because the comparison is component-wise: 26.8.6 < 26.8.16.
+if [ -n "${MARKETING_VERSION:-}" ]; then
+    /usr/libexec/PlistBuddy \
+        -c "Set :CFBundleShortVersionString $MARKETING_VERSION" \
+        -c "Set :CFBundleVersion $MARKETING_VERSION" \
+        "$APP/Contents/Info.plist"
+    echo "Stamped version $MARKETING_VERSION"
+fi
 
 # Ad-hoc signature. Not optional on Apple Silicon: an arm64 binary with no signature is
 # killed by the kernel rather than merely warned about.
