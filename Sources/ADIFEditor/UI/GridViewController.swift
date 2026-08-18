@@ -42,6 +42,18 @@ final class GridViewController: NSViewController {
     /// onto a stale row index would select the wrong QSO.
     private var matches = FindMatches()
 
+    /// The text `matches` was computed against, or `nil` when they are stale.
+    ///
+    /// Find Next used to re-search the whole log on every press, on the reasoning that
+    /// rows may have been edited, sorted or deleted since the text was typed. The
+    /// reasoning is right and the recompute was the wrong way to act on it: every change
+    /// to the records posts `recordsDidChange`, so the matches can simply be marked stale
+    /// there and stepping becomes free on a log nobody has touched. Typing still pays for
+    /// a full pass per keystroke, which at the 100k QSOs §14 asks about is ~0.8s — worth
+    /// coalescing if it ever becomes a real complaint, and not worth a timing heuristic
+    /// before then.
+    private var matchesComputedFor: String?
+
     init(document: LogDocument) {
         self.document = document
         self.columns = document.log.columnNames
@@ -65,6 +77,10 @@ final class GridViewController: NSViewController {
     @objc private func recordsDidChange(_ notification: Notification) {
         addAnyNewColumns()
         showSortIndicator()
+
+        // A row that no longer holds the text is no longer a match, and the row indices
+        // themselves move under a sort or a delete.
+        matchesComputedFor = nil
 
         guard let row = notification.userInfo?[LogDocument.changedRowKey] as? Int,
               row < tableView.numberOfRows else {
@@ -242,7 +258,7 @@ final class GridViewController: NSViewController {
     /// Runs the search and moves to the first match at or after where the operator is,
     /// rather than jumping to the top of the log every keystroke.
     private func search(for text: String) {
-        matches = document?.log.find(text) ?? FindMatches()
+        findMatches(for: text)
 
         guard !text.isEmpty else {
             findBar.showStatus(position: nil, of: nil)
@@ -264,10 +280,20 @@ final class GridViewController: NSViewController {
     }
 
     private func step(_ move: (FindMatches, Int?) -> Int?) {
-        // Recomputed rather than trusted: rows may have been edited, sorted or deleted
-        // since the text was typed, and a stale index would select an unrelated QSO.
-        matches = document?.log.find(findBar.searchText) ?? FindMatches()
+        findMatches(for: findBar.searchText)
         select(match: move(matches, tableView.selectedRow >= 0 ? tableView.selectedRow : nil))
+    }
+
+    /// Brings `matches` up to date for `text`, searching only when it is not already.
+    ///
+    /// Never trusts an index it has not just checked: the cache is discarded by text
+    /// changing and by `recordsDidChange`, which between them cover every way a stored row
+    /// number could come to mean a different QSO.
+    private func findMatches(for text: String) {
+        guard matchesComputedFor != text else { return }
+
+        matches = document?.log.find(text) ?? FindMatches()
+        matchesComputedFor = text
     }
 
     private func select(match row: Int?) {
