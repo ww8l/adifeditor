@@ -10,7 +10,7 @@ final class LogWindowController: NSWindowController {
     private static let frameAutosaveName = NSWindow.FrameAutosaveName("LogWindow")
 
     /// Whether this window opened at a size and place the user had chosen before.
-    private let hasSavedFrame: Bool
+    private var hasSavedFrame = false
 
     /// The frame this window is meant to open at, captured while it is still correct.
     ///
@@ -36,6 +36,31 @@ final class LogWindowController: NSWindowController {
         let grid = GridViewController(document: document)
         window.contentViewController = grid
 
+        super.init(window: window)
+
+        installToolbar()
+
+        if !document.warnings.isEmpty {
+            addWarningBanner(text: ParseWarningText.summary(
+                document.warnings, suppressed: document.log.suppressedWarnings))
+        }
+
+        // After the toolbar and any banner, so it includes their height.
+        restoreFrame(fittingContent: grid.preferredWindowContentSize)
+        desiredFrame = window.frame
+    }
+
+    /// Puts the window back where it was last time, or sizes it to the grid if it cannot.
+    ///
+    /// Runs *after* the toolbar is installed, and that ordering is load-bearing. AppKit
+    /// stores a saved frame with the toolbar's height taken out and adds it back on
+    /// restore, so a window measured before its toolbar exists is a toolbar shorter than
+    /// the one the operator will see — and the usability test below then repairs windows
+    /// that were perfectly good. Restoring last is what makes the frame being judged the
+    /// frame that ends up on screen.
+    private func restoreFrame(fittingContent contentSize: NSSize) {
+        guard let window else { return }
+
         // Order matters: `setFrameUsingName` restores a size the user chose earlier and
         // reports whether it found one, while `setFrameAutosaveName` both registers the
         // window for saving *and* restores, so it has to come second.
@@ -48,30 +73,24 @@ final class LogWindowController: NSWindowController {
         // for a scroll view is nothing, so it clamps to `minSize` in a corner. Worse, the
         // autosave then writes that clamped frame back, and every future window inherits
         // it. So judge by the result rather than the return value.
-        let content = window.contentRect(forFrameRect: window.frame)
-        let restoredUsableFrame = foundSavedFrame
-            && content.width > window.minSize.width
-            && content.height > window.minSize.height
+        //
+        // Both sides of the comparison are frames. They were not: the test read the
+        // *content* rect against `minSize`, which is a frame floor, so it demanded a
+        // content height above the frame minimum — the title bar's worth of pixels
+        // stricter than intended. A window the operator had deliberately shrunk near the
+        // minimum was judged clamped and silently reopened at the grid's own size,
+        // throwing away the size they chose. That is the failure this check exists to
+        // prevent, arrived at from the other direction.
+        hasSavedFrame = foundSavedFrame
+            && window.frame.width > window.minSize.width
+            && window.frame.height > window.minSize.height
 
         // Sized from the grid rather than left to `fittingSize`. Applies both to a first
         // run and to repairing a saved frame that no longer works; a frame the user can
         // actually see always wins over one they once chose on another display.
-        if !restoredUsableFrame {
-            window.setContentSize(grid.preferredWindowContentSize)
+        if !hasSavedFrame {
+            window.setContentSize(contentSize)
         }
-
-        self.hasSavedFrame = restoredUsableFrame
-        super.init(window: window)
-
-        installToolbar()
-
-        if !document.warnings.isEmpty {
-            addWarningBanner(text: ParseWarningText.summary(
-                document.warnings, suppressed: document.log.suppressedWarnings))
-        }
-
-        // After the toolbar and any banner, so it includes their height.
-        desiredFrame = window.frame
     }
 
     required init?(coder: NSCoder) {
