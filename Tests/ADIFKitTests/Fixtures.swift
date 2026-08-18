@@ -27,7 +27,13 @@ enum Fixtures {
         let contents = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil)) ?? []
         return contents.filter {
-            $0.lastPathComponent != "README.md" && !$0.hasDirectoryPath
+            // Dotfiles are excluded rather than fed to the parser. A `.DS_Store` — which
+            // the Finder drops into any directory a human opens — is not UTF-8, so it
+            // fails five tests at once with a parser-shaped error that has nothing to do
+            // with the parser.
+            $0.lastPathComponent != "README.md"
+                && !$0.lastPathComponent.hasPrefix(".")
+                && !$0.hasDirectoryPath
         }
     }
 
@@ -41,9 +47,11 @@ enum Fixtures {
     static let byteIdentityExempt: Set<String> = [
         "bad-length-short.adi",
         "bad-length-long.adi",
+        "huge-length.adi",
         "length-as-bytes.adi",
         "truncated.adi",
         "truncated-tag.adi",
+        "unparseable-length.adi",
     ]
 
     /// Fixtures expected to produce at least one warning.
@@ -52,7 +60,9 @@ enum Fixtures {
     /// enough to warn about, but the stray text is preserved verbatim, so it still
     /// round-trips byte for byte. Warning and rewriting are separate things.
     static let expectedToWarn: Set<String> = byteIdentityExempt.union([
-        "text-between-fields.adi"
+        "html-error-page.adi",
+        "stray-bracket.adi",
+        "text-between-fields.adi",
     ])
 
     /// The one fixture that must refuse to open.

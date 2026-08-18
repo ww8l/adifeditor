@@ -62,6 +62,20 @@ struct ADIFScanner {
         return nil
     }
 
+    /// Index of the next `<` or `>` at or after `from`, or `nil` when neither remains.
+    ///
+    /// Exists so the recovery path can ask "did the file end inside this tag?" without
+    /// materializing the rest of the file as a `String` to search it. Doing that made
+    /// the scan quadratic: 80 KB of a downloaded HTML error page took 21 seconds.
+    private func indexOfNextBracket(from: Int) -> Int? {
+        var i = from
+        while i < scalars.count {
+            if scalars[i] == "<" || scalars[i] == ">" { return i }
+            i += 1
+        }
+        return nil
+    }
+
     private func text(_ range: Range<Int>) -> String {
         var view = String.UnicodeScalarView()
         for i in range.clamped(to: 0..<scalars.count) { view.append(scalars[i]) }
@@ -80,20 +94,66 @@ struct ADIFScanner {
     /// A parsed `<...>` tag header, before its value is read.
     private struct Tag {
         var spelling: String
+
+        /// The LENGTH as a usable number. `nil` for a terminator, which carries no
+        /// LENGTH at all, and also for a field whose LENGTH is present but not a
+        /// non-negative integer — the two are told apart by `hasLength`.
         var declaredLength: Int?
+
+        /// True when the tag carried a `:`, which is what makes it a field rather than
+        /// a terminator. A broken LENGTH does not stop a field being a field.
+        var hasLength: Bool
+
+        /// The LENGTH exactly as the file spelled it, for the diagnostic. "" when the
+        /// tag carried none.
+        var lengthSpelling: String
+
         var typeIndicator: Character?
+
         /// Index just past the closing `>`.
         var end: Int
-        /// A tag with no length is a terminator: `<EOR>`, `<EOH>`.
-        var isTerminator: Bool { declaredLength == nil }
+
+        /// A tag with no LENGTH at all is a terminator: `<EOR>`, `<EOH>`.
+        var isTerminator: Bool { !hasLength }
     }
 
-    /// Parses the tag starting at `start` (which must be a `<`). Returns `nil` if the
-    /// tag is unterminated or its length field is not a number.
+    /// True when `spelling` could be an ADIF field name. ADIF restricts them to ASCII
+    /// letters, digits and underscore (§8).
+    ///
+    /// This gates only the broken-LENGTH recovery below, never a well-formed tag: a
+    /// logger emitting `<MY-FIELD:3>abc` still gets its field. What it rules out is
+    /// treating `<a href="http://example.com/x">` — the shape a failed log download
+    /// arrives in — as a field named `a href="http`, which would put a column of HTML
+    /// in the grid.
+    private static func isPlausibleFieldName(_ spelling: String) -> Bool {
+        guard !spelling.isEmpty else { return false }
+        for scalar in spelling.unicodeScalars {
+            switch scalar.value {
+            case 0x41...0x5A, 0x61...0x7A, 0x30...0x39, 0x5F: continue
+            default: return false
+            }
+        }
+        return true
+    }
+
+    /// Parses the tag starting at `start` (which must be a `<`).
+    ///
+    /// Returns `nil` when what sits there cannot be a tag at all — unterminated, empty,
+    /// or with a second `<` inside it before any `>`. That last case is not pedantry:
+    /// scanning past an embedded `<` to a later `>` turns `<<MODE:3>FT8` into a field
+    /// genuinely named `<MODE`, and because the result looks well-formed no diagnostic
+    /// ever fires. The bogus column reaches the grid in silence.
+    ///
+    /// A tag whose LENGTH is not a number is *not* `nil`. It is a field with a broken
+    /// length, and rung 4 of decision 5's ladder recovers its value — dropping it would
+    /// lose a field the file plainly contains, which §11 forbids.
     private func parseTag(at start: Int) -> Tag? {
         guard start < scalars.count, scalars[start] == "<" else { return nil }
         var close = start + 1
-        while close < scalars.count, scalars[close] != ">" { close += 1 }
+        while close < scalars.count, scalars[close] != ">" {
+            if scalars[close] == "<" { return nil }       // a new tag opens; this never closed
+            close += 1
+        }
         guard close < scalars.count else { return nil }   // unterminated
 
         let body = text((start + 1)..<close)
@@ -103,13 +163,22 @@ struct ADIFScanner {
         guard !spelling.isEmpty else { return nil }
 
         if parts.count == 1 {
-            return Tag(spelling: spelling, declaredLength: nil,
-                       typeIndicator: nil, end: close + 1)
+            return Tag(spelling: spelling, declaredLength: nil, hasLength: false,
+                       lengthSpelling: "", typeIndicator: nil, end: close + 1)
         }
-        guard let length = Int(parts[1]), length >= 0 else { return nil }
+
+        let lengthSpelling = String(parts[1])
         let type = parts.count > 2 ? parts[2].first : nil
-        return Tag(spelling: spelling, declaredLength: length,
-                   typeIndicator: type, end: close + 1)
+        if let length = Int(lengthSpelling), length >= 0 {
+            return Tag(spelling: spelling, declaredLength: length, hasLength: true,
+                       lengthSpelling: lengthSpelling, typeIndicator: type,
+                       end: close + 1)
+        }
+        // The LENGTH is unusable. Keep the field only if its name is one, so that
+        // recovery cannot manufacture columns out of markup.
+        guard ADIFScanner.isPlausibleFieldName(spelling) else { return nil }
+        return Tag(spelling: spelling, declaredLength: nil, hasLength: true,
+                   lengthSpelling: lengthSpelling, typeIndicator: type, end: close + 1)
     }
 
     /// True when a well-formed tag begins at `start`. Used to decide whether a run of
@@ -124,12 +193,28 @@ struct ADIFScanner {
     ///
     /// Returns the value and the literal text separating it from the next `<`.
     private mutating func readValue(tag: Tag) -> (value: String, trailing: String) {
-        let declared = tag.declaredLength ?? 0
         let valueStart = tag.end
+
+        guard let declared = tag.declaredLength else {
+            // 0 — The LENGTH is not a number, so there is nothing to try the ladder on.
+            //     Recover the value the way rung 4 does and keep the field.
+            return recoverValue(from: valueStart) { recovered in
+                .unparseableLength(field: tag.spelling,
+                                   declared: tag.lengthSpelling,
+                                   recovered: recovered)
+            }
+        }
 
         // 1 — LENGTH as scalars, the common case. Accepted when only whitespace stands
         //     between the value and the next tag.
-        let endAsScalars = min(valueStart + declared, scalars.count)
+        //
+        //     Written as a comparison against what remains rather than as
+        //     `min(valueStart + declared, scalars.count)`, because that addition traps
+        //     on overflow for a length near `Int.max` and killed the process outright —
+        //     from a header field, before a window ever appeared (§6.4).
+        let endAsScalars = declared > scalars.count - valueStart
+            ? scalars.count
+            : valueStart + declared
         if endAsScalars - valueStart == declared {
             let next = indexOfNextTagStart(from: endAsScalars) ?? scalars.count
             if isAllWhitespace(endAsScalars..<next) {
@@ -165,15 +250,27 @@ struct ADIFScanner {
         // 4 — The length was wrong. Resynchronize from the *start of the value* to the
         //     next `<` (§8). Scanning from the end of the declared length instead would
         //     swallow the following field whenever the length overran.
+        return recoverValue(from: valueStart) { recovered in
+            .lengthMismatch(field: tag.spelling,
+                            declared: declared,
+                            recovered: recovered)
+        }
+    }
+
+    /// Rung 4's recovery, shared with the unusable-LENGTH case: the value runs from
+    /// `valueStart` to the next `<`, less any trailing whitespace. `warning` is handed
+    /// the recovered length so each caller can name its own fault.
+    private mutating func recoverValue(
+        from valueStart: Int,
+        warning: (Int) -> ADIFWarning.Kind
+    ) -> (value: String, trailing: String) {
         let next = indexOfNextTagStart(from: valueStart) ?? scalars.count
         var valueEnd = next
         while valueEnd > valueStart,
               CharacterSet.whitespacesAndNewlines.contains(scalars[valueEnd - 1]) {
             valueEnd -= 1
         }
-        warn(.lengthMismatch(field: tag.spelling,
-                             declared: declared,
-                             recovered: valueEnd - valueStart))
+        warn(warning(valueEnd - valueStart))
         return accept(valueStart..<valueEnd, upTo: next)
     }
 
@@ -240,10 +337,13 @@ struct ADIFScanner {
             }
 
             guard let tag = parseTag(at: tagStart) else {
-                // Unterminated or unparseable tag. If there is no `>` at all the file
-                // ended mid-tag; otherwise skip this `<` and resynchronize.
-                let rest = text(tagStart..<scalars.count)
-                if !rest.contains(">") {
+                // Not a tag. If no bracket of any kind follows, the file ended mid-tag;
+                // otherwise this `<` is stray, so skip it and resume at the next one.
+                //
+                // An index scan, not a substring: materializing the rest of the file to
+                // ask whether it holds a `>` is what made this loop quadratic.
+                if indexOfNextBracket(from: tagStart + 1) == nil {
+                    let rest = text(tagStart..<scalars.count)
                     warn(.truncatedTag(partial: String(rest.prefix(40))))
                     if result.fields.isEmpty {
                         result.leadingText += rest

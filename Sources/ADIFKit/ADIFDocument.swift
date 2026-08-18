@@ -104,6 +104,11 @@ public struct ADIFWarning: Equatable, Sendable {
         /// by scanning to the next tag.
         case lengthMismatch(field: String, declared: Int, recovered: Int)
 
+        /// A field's LENGTH was not a non-negative number at all — `<CALL:x>`, `<CALL:>`,
+        /// `<CALL:-1>`. The field is kept and its value recovered by scanning to the next
+        /// tag; `declared` is the spelling the file used, since there is no number.
+        case unparseableLength(field: String, declared: String, recovered: Int)
+
         /// Text sat between two fields. §8 says it belongs to neither; it is carried
         /// through to the output but flagged here in case it signals a deeper problem.
         case unexpectedTextBetweenFields(text: String)

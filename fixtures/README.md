@@ -18,8 +18,8 @@ Still wanted: WSJT-X, MSHV, N1MM (§11 names all three).
 
 ## `synthetic/`
 
-Hand-built hostile cases. Four are deliberately malformed and are the only files
-expected to differ on write, and only at the site of the defect.
+Hand-built hostile cases. The malformed ones are the only files expected to differ on
+write, and only at the site of the defect.
 
 ### Well-formed — must round-trip **byte-identical**
 
@@ -53,6 +53,10 @@ expected to differ on write, and only at the site of the defect.
 | `text-between-fields.adi` | Stray text between two fields | Keep both fields, warn `unexpectedTextBetweenFields` |
 | `truncated.adi` | Final record has no `<EOR>` | Keep the partial record, warn (decision 7) |
 | `truncated-tag.adi` | File ends mid-tag | Keep what parsed, warn |
+| `unparseable-length.adi` | `<CALL:x>` — the LENGTH is not a number | Keep the field, recover the value, warn `unparseableLength`. Dropping the tag leaves a QSO with no callsign |
+| `huge-length.adi` | `<CALL:9223372036854775807>` — a LENGTH near `Int.max` | Recover, warn `lengthMismatch`. The addition used to overflow and kill the process on SIGTRAP (§6.4) |
+| `stray-bracket.adi` | `<<MODE:3>` — a doubled bracket | Warn `resynchronized`, then read `MODE` normally. Scanning past the second `<` used to yield a field named `<MODE`, silently |
+| `html-error-page.adi` | Not ADIF at all: the HTML page a failed log download returns (§6.4's own example) | Open, warn, invent no fields. `<a href="http://…">` must not become a column named `a href="http`. Round-trips byte-identical |
 
 ### Fatal — the only error that refuses to open
 

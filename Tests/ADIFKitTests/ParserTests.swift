@@ -213,6 +213,101 @@ struct ParserTests {
         }
     }
 
+    @Test("a LENGTH that is not a number keeps the field rather than dropping it")
+    func unparseableLengthKeepsField() throws {
+        // Before this was handled, <CALL:x> made the whole tag unparseable, the scanner
+        // resynchronized past it, and the operator was left looking at a QSO with no
+        // callsign — invisible to dedupe, to Find and to QRZ. The bytes still round-
+        // tripped, so the byte-identity suite next door had nothing to say about it.
+        let document = try parseFixture("unparseable-length.adi")
+        #expect(document.records.count == 1)
+        #expect(document.records[0].fields.map(\.spelling) == ["CALL", "MODE"])
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.records[0]["MODE"] == "FT8")
+
+        let kinds = document.warnings.map(\.kind)
+        #expect(kinds == [.unparseableLength(field: "CALL", declared: "x", recovered: 5)])
+    }
+
+    @Test("a LENGTH too large to address the file recovers instead of trapping")
+    func hugeLengthDoesNotOverflow() throws {
+        // §6.4: `min(valueStart + declared, scalars.count)` traps on overflow, and the
+        // process died on SIGTRAP with no alert and no chance to save anything else.
+        // A header field triggered it too, so the app could die before a window existed.
+        let document = try parseFixture("huge-length.adi")
+        #expect(document.records.count == 2)
+        #expect(document.records[1]["CALL"] == "W2DEF")
+        #expect(document.records[1]["MODE"] == "FT8")
+
+        let kinds = document.warnings.map(\.kind)
+        #expect(kinds == [.lengthMismatch(field: "CALL",
+                                          declared: Int.max,
+                                          recovered: 5)])
+    }
+
+    @Test("a header field's huge LENGTH does not trap either")
+    func hugeLengthInHeader() throws {
+        let document = try parse("<PROGRAMID:\(Int.max)>x<EOH>\n<CALL:5>W1ABC<EOR>\n")
+        #expect(document.records.count == 1)
+        #expect(document.records[0]["CALL"] == "W1ABC")
+    }
+
+    @Test("a stray < does not become part of the next field's name")
+    func strayBracketDoesNotRenameTheNextField() throws {
+        // `<<MODE:3>FT8` used to parse as a field literally named "<MODE", because the
+        // scan for the closing `>` ran straight past the second `<`. The result looked
+        // well-formed, so no warning fired at all and a bogus column reached the grid.
+        let document = try parseFixture("stray-bracket.adi")
+        #expect(document.records[0].fields.map(\.spelling) == ["CALL", "MODE"])
+        #expect(document.records[0]["MODE"] == "FT8")
+        #expect(document.warnings.map(\.kind) == [.resynchronized(skipped: 1)])
+    }
+
+    @Test("an HTML error page opens without inventing columns out of markup")
+    func htmlErrorPageInventsNoFields() throws {
+        // §6.4's own example: a failed log download is an HTML page, not ADIF. Recovery
+        // must not be so eager that `<a href="http://example.com/retry">` becomes a
+        // field named `a href="http`. Nothing here is a field, so nothing is a column.
+        let document = try parseFixture("html-error-page.adi")
+        #expect(document.columnNames.isEmpty)
+        #expect(document.records.allSatisfy { $0.fields.isEmpty })
+        #expect(!document.warnings.isEmpty)
+    }
+
+    @Test("a well-formed tag with an odd name is still a field")
+    func oddFieldNameStillParses() throws {
+        // The plausible-name rule gates only the broken-LENGTH recovery. A logger that
+        // emits a hyphen in a field name, with an honest length, must not lose the field.
+        let document = try parse("<EOH>\n<MY-FIELD:3>abc<CALL:5>W1ABC<EOR>\n")
+        #expect(document.records[0].fields.map(\.spelling) == ["MY-FIELD", "CALL"])
+        #expect(document.warnings.isEmpty)
+    }
+
+    @Test("resynchronization is linear, not quadratic")
+    func resyncIsLinear() throws {
+        // Every `<` that opened nothing used to materialize the entire rest of the file
+        // as a String to search it for `>`, then advance one character. 80 KB took 21
+        // seconds with no progress bar and no way to cancel. The shape of the bug is
+        // what this asserts: 4x the input must not cost anywhere near 16x the time.
+        func parseTime(_ count: Int) throws -> TimeInterval {
+            let text = "<EOH>\n" + String(repeating: "<>", count: count)
+                     + "<CALL:5>W1ABC<EOR>\n"
+            let data = Data(text.utf8)
+            let started = Date()
+            _ = try ADIFParser.parse(data)
+            return -started.timeIntervalSinceNow
+        }
+
+        _ = try parseTime(2_000)                       // warm up, unmeasured
+        let small = try parseTime(10_000)
+        let large = try parseTime(40_000)
+
+        // Quadratic would be ~16x. A generous ceiling: the point is the exponent, and a
+        // loaded CI runner must not be able to fail this for being slow.
+        #expect(large < max(small * 8, 0.5),
+                "40k took \(large)s against 10k's \(small)s — the quadratic scan is back")
+    }
+
     @Test("warnings carry a byte offset")
     func warningsCarryOffsets() throws {
         let document = try parseFixture("bad-length-short.adi")

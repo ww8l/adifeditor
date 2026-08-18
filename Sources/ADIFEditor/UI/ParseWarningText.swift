@@ -31,6 +31,11 @@ enum ParseWarningText {
             return "\(field) declared a length of \(declared) but held \(recovered) "
                  + "characters. The value was recovered by reading to the next field."
 
+        case .unparseableLength(let field, let declared, let recovered):
+            return "\(field) declared a length of \(quoted(declared)), which is not a "
+                 + "number. The field was kept and its \(recovered)-character value "
+                 + "recovered by reading to the next field."
+
         case .unexpectedTextBetweenFields(let text):
             return "Unexpected text between fields: \(quoted(text)). It belongs to no "
                  + "field and has been left where it was."
