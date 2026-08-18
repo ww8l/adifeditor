@@ -40,13 +40,18 @@ public enum ADIFParser {
         // header" — misclassifies a file that opens directly with `<EOH>`, which is a
         // file with an empty header, not a headerless one. Several fixtures do exactly
         // that. Looking at the terminator handles both shapes correctly.
+        // Everything the scanner is handed from here is offset by the BOM that was just
+        // taken off the front, so warnings can name a byte of the file rather than a byte
+        // of what is left of it (§6.4).
+        let bomWidth = byteOrderMark ? 3 : 0
+
         var probe = ADIFScanner(text: text)
         let first = probe.scanFieldsToTerminator()
         let firstIsHeader = first.terminatorSpelling.map {
             ADIFField.normalize($0) == "EOH"
         } ?? false
 
-        var scanner = ADIFScanner(text: text)
+        var scanner = ADIFScanner(text: text, startingAtByte: bomWidth)
         if firstIsHeader {
             // Re-scan so the header's own text is captured verbatim, including any
             // comment text and the terminator's trailing newline.
@@ -59,7 +64,8 @@ public enum ADIFParser {
             // file — carry it as header text so it survives the round trip.
             let preamble = String(text[text.startIndex..<firstTag])
             document.header = preamble.isEmpty ? nil : preamble
-            scanner = ADIFScanner(text: String(text[firstTag...]))
+            scanner = ADIFScanner(text: String(text[firstTag...]),
+                                  startingAtByte: bomWidth + preamble.utf8.count)
         } else {
             // No tags at all: the whole file is preamble.
             document.header = text
