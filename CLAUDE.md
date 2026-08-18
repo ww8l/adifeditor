@@ -512,7 +512,19 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     `v26.8.3`, `v26.8.13`. The tag is the single source of truth; `MARKETING_VERSION`
     stamps it into the bundled plist at build time and never back into `Support/Info.plist`.
     Two releases in one day collide, and the escape hatch is a fourth component
-    (`v26.8.16.1`), which would need the tag glob widened. It has not come up.
+    (`v26.8.16.1`), which **works today and needs no change to the workflow**. This file
+    said it "would need the tag glob widened" and that was wrong: GitHub's `*` matches any
+    character except `/`, so `release.yml`'s `'v*.*.*'` already matches `v26.8.16.1` —
+    the third `*` absorbs `16.1`. Worth being right about, because the moment anyone needs
+    it is the moment they are trying to ship a same-day second release, and widening an
+    already-wide glob would cost a billed run to discover.
+
+    The same permissiveness cuts the other way: `v-test.a.b` matches too, and
+    `version="${GITHUB_REF_NAME#v}"` would put its name on a draft release.
+    `'v[0-9]*.[0-9]*.[0-9]*'` would refuse that while still accepting the fourth
+    component. Left alone deliberately — the only person who pushes tags here is the
+    owner, a trigger change cannot be proven without spending a tag and a billed run on
+    it, and the current glob errs towards firing rather than towards not firing.
 
     Releases are **drafts** and stay that way unless the owner publishes one, which is
     enough for an author installing his own build. Nothing is notarized and

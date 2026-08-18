@@ -17,6 +17,9 @@ name: Release
 # against the runner's date on purpose: a release cut on one day and tagged the next is
 # normal and should not fail the build.
 
+# `*` matches any character except `/`, so this is wider than it looks: a same-day second
+# release tagged v26.8.16.1 already fires it, no widening needed. So does anything else
+# shaped v<x>.<y>.<z>, which is why the tag you push is the tag that ships.
 on:
   push:
     tags:
