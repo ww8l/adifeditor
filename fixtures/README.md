@@ -52,6 +52,8 @@ write, and only at the site of the defect.
 | `bad-length-long.adi` | `<CALL:9>W1ABC` — length overruns into the next tag | Recover, warn |
 | `length-as-bytes.adi` | `<COMMENT:7>Grüße` — 5 characters, 7 bytes; a byte-counting writer | Re-read as bytes, warn `lengthInterpretedAsBytes` |
 | `text-between-fields.adi` | Stray text between two fields | Keep both fields, warn `unexpectedTextBetweenFields` |
+| `separator-between-fields.adi` | `<CALL:5>W1ABC,<GRIDSQUARE:4>DN70,` — honest lengths, a comma between fields | Keep every declared length and carry the commas, warn `unexpectedTextBetweenFields`. Round-trips byte-identical. The lengths used to be overridden and the comma glued onto the value, so the file was written back as `<CALL:6>W1ABC,` |
+| `tag-inside-value.adi` | `<COMMENT:3>a<b>c ` — a value holding what looks like a tag | **One** record. `<b>` carries no LENGTH but is not `<EOR>` or `<EOH>`, and taking it for a terminator produced two QSOs out of one `<EOR>` |
 | `truncated.adi` | Final record has no `<EOR>` | Keep the partial record, warn (decision 7) |
 | `truncated-tag.adi` | File ends mid-tag | Keep what parsed, warn |
 | `unparseable-length.adi` | `<CALL:x>` — the LENGTH is not a number | Keep the field, recover the value, warn `unparseableLength`. Dropping the tag leaves a QSO with no callsign |

@@ -350,6 +350,98 @@ struct ParserTests {
         #expect(warning.byteOffset > 0)
     }
 
+    @Test("the offset counts bytes, not characters")
+    func offsetsCountBytes() throws {
+        // `<EOH>\n<CALL:5>W1ABC<COMMENT:7>Grüße<MODE:3>FT8<EOR>\n`, where the ü and ß
+        // are two bytes each. The warning belongs at the start of COMMENT's value: 6 for
+        // the header line, 8 for `<CALL:5>`, 5 for the callsign, 11 for `<COMMENT:7>`.
+        // Counting scalars instead of bytes gives the same answer here and a wrong one
+        // for anything after the multibyte data — which is why the second case exists.
+        let document = try parseFixture("length-as-bytes.adi")
+        let warning = try #require(document.warnings.first)
+        #expect(warning.byteOffset == 30)
+    }
+
+    @Test("an offset after multibyte data counts the multibyte bytes")
+    func offsetsAfterMultibyteContent() throws {
+        // Grüße is 5 characters and 7 bytes, so a scalar count would report 31 and point
+        // two bytes short — inside `<CALL`. §6.4 wants the offset to name the defect.
+        let text = "<EOH>\n<COMMENT:5>Grüße <CALL:3>W1ABC<EOR>\n"
+        let document = try ADIFParser.parse(Data(text.utf8))
+        let warning = try #require(document.warnings.first)
+        #expect(warning.kind == .lengthMismatch(field: "CALL", declared: 3, recovered: 5))
+        #expect(warning.byteOffset == 33)
+    }
+
+    @Test("a BOM is counted in the offsets that follow it")
+    func offsetsIncludeTheBOM() throws {
+        // The BOM is taken off the front before scanning (decision 4 keeps it as a flag),
+        // and used to drop out of the count with it, so every warning in a BOM file
+        // pointed three bytes early.
+        var bytes = Data([0xEF, 0xBB, 0xBF])
+        bytes.append(contentsOf: Data("Test header\n<EOH>\n<CALL:3>W1ABC<EOR>\n".utf8))
+        let document = try ADIFParser.parse(bytes)
+        let warning = try #require(document.warnings.first)
+        // 3 for the BOM, 12 for the header line, 6 for <EOH>\n, 8 for <CALL:3>.
+        #expect(warning.byteOffset == 29)
+    }
+
+    @Test("a preamble is counted in the offsets that follow it")
+    func offsetsIncludeThePreamble() throws {
+        // A headerless file with leading text gets a fresh scanner over the text from the
+        // first `<`, whose offsets used to be relative to that `<`. On a real file that
+        // lands the reported offset inside a valid field, which is worse than none.
+        let text = "some preamble text 12345\n<CALL:3>W1ABC<EOR>\n"
+        let document = try ADIFParser.parse(Data(text.utf8))
+        let warning = try #require(document.warnings.first)
+        // 25 for the preamble, 8 for <CALL:3>.
+        #expect(warning.byteOffset == 33)
+    }
+
+    // MARK: - Separators and stray tags
+
+    @Test("a separator between fields is not part of the value")
+    func separatorBetweenFields() throws {
+        // A logger writing `<CALL:5>W1ABC,<GRIDSQUARE:4>DN70,` declares honest lengths
+        // and puts its own separator between fields. §8 says text between fields is
+        // ignored; the length is right and must be kept. This used to override every one
+        // of those lengths and glue the comma onto the value, so the file was written
+        // back as `<CALL:6>W1ABC,` — bytes changed on a file nobody edited (§6.2a), with
+        // a warning naming a fault that did not exist.
+        let document = try parseFixture("separator-between-fields.adi")
+        #expect(document.records.count == 1)
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.records[0]["GRIDSQUARE"] == "DN70")
+        #expect(document.records[0]["MODE"] == "FT8")
+        #expect(document.records[0].fields.map(\.lengthSpelling) == ["5", "4", "3"])
+        #expect(document.warnings.map(\.kind) == [
+            .unexpectedTextBetweenFields(text: ","),
+            .unexpectedTextBetweenFields(text: ","),
+        ])
+    }
+
+    @Test("a run that looks like data is still treated as a wrong length")
+    func dataAfterTheLengthIsNotASeparator() throws {
+        // The other half of the rule above, and the reason it is not simply "a tag
+        // follows the run": `<CALL:3>W1ABC<MODE:3>FT8` also has a well-formed tag after
+        // its run, and there the run is the rest of the callsign.
+        let document = try parseFixture("bad-length-short.adi")
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.warnings.map(\.kind)
+                == [.lengthMismatch(field: "CALL", declared: 3, recovered: 5)])
+    }
+
+    @Test("a stray tag inside a record does not end the record")
+    func strayTagIsNotATerminator() throws {
+        // ADIF has two terminators. Any other tag without a LENGTH used to be taken for
+        // one, so `<COMMENT:3>a<b>c <CALL:5>W1ABC<EOR>` produced two QSOs from one
+        // `<EOR>` — the grid showing a contact the file does not contain.
+        let document = try parseFixture("tag-inside-value.adi")
+        #expect(document.records.count == 1)
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.warnings.contains { $0.kind == .unexpectedTextBetweenFields(text: "<b>") })
+    }
+
     // MARK: - Encoding
 
     @Test("invalid UTF-8 refuses to open and names the byte")

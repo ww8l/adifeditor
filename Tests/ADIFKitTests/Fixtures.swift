@@ -52,6 +52,7 @@ enum Fixtures {
         "truncated.adi",
         "truncated-tag.adi",
         "unparseable-length.adi",
+        "tag-inside-value.adi",
     ]
 
     /// Fixtures expected to produce at least one warning.
@@ -61,6 +62,7 @@ enum Fixtures {
     /// round-trips byte for byte. Warning and rewriting are separate things.
     static let expectedToWarn: Set<String> = byteIdentityExempt.union([
         "html-error-page.adi",
+        "separator-between-fields.adi",
         "stray-bracket.adi",
         "text-between-fields.adi",
     ])

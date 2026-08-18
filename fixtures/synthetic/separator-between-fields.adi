@@ -1,0 +1,3 @@
+Comma separated, from a logger that writes its own field separators
+<EOH>
+<CALL:5>W1ABC,<GRIDSQUARE:4>DN70,<MODE:3>FT8<EOR>

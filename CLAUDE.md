@@ -382,9 +382,22 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
    byte-vs-character case it was written to solve. Actual order: read LENGTH as
    characters and accept if only whitespace precedes the next `<`; else re-read LENGTH
    as UTF-8 bytes and re-check, warning `lengthInterpretedAsBytes`; else treat the run
-   as ignorable inter-field text if the next `<` opens a well-formed tag, warning
-   `unexpectedTextBetweenFields`; else scan forward, warning `resynchronized(offset:)`.
-   Never discards a field it successfully read.
+   as ignorable inter-field text if the next `<` opens a well-formed tag **and the run
+   holds no letters or digits**, warning `unexpectedTextBetweenFields`; else scan
+   forward, warning `resynchronized(offset:)`. Never discards a field it successfully
+   read.
+
+   *(Rung 3's qualification added 2026-08-18, when the rung was implemented — it had been
+   written as "the scalar after the length is whitespace", which missed every separator
+   that is not a space, and the helper for the real test sat uncalled. The rung as
+   originally worded is too generous on its own: `<CALL:3>W1ABC<MODE:3>FT8` also has a
+   well-formed tag after its run, and there the run is the rest of the callsign. A comma
+   or a pipe between fields is a separator; `BC` is data.)*
+
+   Related, same session: **only `<EOR>` and `<EOH>` end a record.** ADIF has two
+   terminators, and any other LENGTH-less tag was being taken for one, so
+   `<COMMENT:3>a<b>c <CALL:5>W1ABC<EOR>` produced two QSOs from one `<EOR>`. Such a tag
+   is now carried as stray text with a warning.
 
 6. **Invalid UTF-8 is fatal, loudly.** Strict decode; on failure refuse to open and
    report the byte offset of the first invalid sequence. Lossy decoding would violate

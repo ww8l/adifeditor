@@ -12,14 +12,22 @@ struct ADIFScanner {
     /// Current position. Moves forward only.
     var index: Int = 0
 
-    /// Byte offset of `index` into the original text, maintained incrementally so
+    /// Byte offset of `index` into the original file, maintained incrementally so
     /// warnings can name a position (§6.4) without rescanning the file each time.
-    var byteOffset: Int = 0
+    ///
+    /// Into the *file*, not into `text`. The parser hands the scanner text with the BOM
+    /// removed, and for a headerless file with a preamble it hands over only the part
+    /// from the first `<`. Both of those used to drop out of the count, so a warning
+    /// pointed at a byte earlier than the fault — by 3 for a BOM, and by the whole
+    /// preamble otherwise, which on a real file lands the offset inside a valid field.
+    var byteOffset: Int
 
     var warnings: [ADIFWarning] = []
 
-    init(text: String) {
+    /// `startingAtByte` is what the caller already consumed before this text began.
+    init(text: String, startingAtByte startByte: Int = 0) {
         self.scalars = Array(text.unicodeScalars)
+        self.byteOffset = startByte
     }
 
     var isAtEnd: Bool { index >= scalars.count }
@@ -80,6 +88,16 @@ struct ADIFScanner {
         var view = String.UnicodeScalarView()
         for i in range.clamped(to: 0..<scalars.count) { view.append(scalars[i]) }
         return String(view)
+    }
+
+    /// True when the range holds anything that could be part of a value rather than a
+    /// separator between fields. Punctuation and whitespace are separators; letters and
+    /// digits are somebody's data.
+    private func holdsLettersOrDigits(_ range: Range<Int>) -> Bool {
+        for i in range.clamped(to: 0..<scalars.count) {
+            if CharacterSet.alphanumerics.contains(scalars[i]) { return true }
+        }
+        return false
     }
 
     private func isAllWhitespace(_ range: Range<Int>) -> Bool {
@@ -242,15 +260,37 @@ struct ADIFScanner {
         }
 
         // 3 — Neither reading lands on whitespace. Two different faults look identical
-        //     here, and the scalar immediately after the declared length tells them
-        //     apart: whitespace means the length was honest and stray text follows;
-        //     anything else means the length itself was wrong.
-        if endAsScalars - valueStart == declared,
-           endAsScalars < scalars.count,
-           CharacterSet.whitespacesAndNewlines.contains(scalars[endAsScalars]) {
+        //     here, and what follows the run tells them apart: if a well-formed tag
+        //     opens where the run ends, the declared length was honest and the run is
+        //     inter-field text, which §8 says is ignored — carried, here, since ignoring
+        //     it would drop bytes (§6.2a). Anything else means the length itself is
+        //     wrong, and rung 4 recovers.
+        //
+        //     Decision 5 words this rung as "a well-formed tag opens where the run
+        //     ends", and that alone is too generous: `<CALL:3>W1ABC<MODE:3>FT8` also has
+        //     a well-formed tag after its run, and there the run is the rest of the
+        //     callsign, not a separator. So the run must also not look like data —
+        //     no letters and no digits. A comma, a pipe, a semicolon between fields is
+        //     ignorable; `BC` is the end of `W1ABC`.
+        //
+        //     It had been implemented as "the scalar immediately after the length is
+        //     whitespace", which missed every separator that is not a space: a log
+        //     writing `<CALL:5>W1ABC,<GRID:4>DN70` had its honest length overridden and
+        //     the comma glued onto the value, so it was written back as `<CALL:6>W1ABC,`
+        //     — a §6.2a break with a warning that named the wrong fault. That whitespace
+        //     test is kept as a second chance, for the case where the run is blank but
+        //     what follows is not a tag at all: truncated input, where rung 4 would
+        //     otherwise complain about a length that was fine.
+        if endAsScalars - valueStart == declared, endAsScalars < scalars.count {
             let next = indexOfNextTagStart(from: endAsScalars) ?? scalars.count
-            warn(.unexpectedTextBetweenFields(text: text(endAsScalars..<next)))
-            return accept(valueStart..<endAsScalars, upTo: next)
+            let isSeparator = next < scalars.count
+                && opensWellFormedTag(at: next)
+                && !holdsLettersOrDigits(endAsScalars..<next)
+            if isSeparator
+                || CharacterSet.whitespacesAndNewlines.contains(scalars[endAsScalars]) {
+                warn(.unexpectedTextBetweenFields(text: text(endAsScalars..<next)))
+                return accept(valueStart..<endAsScalars, upTo: next)
+            }
         }
 
         // 4 — The length was wrong. Resynchronize from the *start of the value* to the
@@ -317,8 +357,17 @@ struct ADIFScanner {
                 // No further tags. Leftover text goes after the terminator the writer
                 // will synthesize, never before it: text placed before a synthesized
                 // `<EOR>` can fuse with it into a tag that never existed.
+                //
+                // Unless there are no fields either, in which case no record is made and
+                // nothing will carry a trailing text — it has to go in the leading text
+                // the parser folds into the header. A file of nothing but HTML ends that
+                // way, and its last newline was being dropped.
                 if index < scalars.count {
-                    result.trailingText += text(index..<scalars.count)
+                    if result.fields.isEmpty {
+                        result.leadingText += text(index..<scalars.count)
+                    } else {
+                        result.trailingText += text(index..<scalars.count)
+                    }
                     advance(to: scalars.count)
                 }
                 if !result.fields.isEmpty {
@@ -372,6 +421,24 @@ struct ADIFScanner {
             }
 
             if tag.isTerminator {
+                // ADIF has exactly two terminators. Anything else without a LENGTH is
+                // not one, and taking it for one splits a record: `<COMMENT:3>a<b>c
+                // <CALL:5>W1ABC<EOR>` used to produce two QSOs from one `<EOR>`, so the
+                // grid showed a contact the file does not contain. Carry its bytes as
+                // stray text instead and keep scanning the record it sits inside.
+                let spelling = ADIFField.normalize(tag.spelling)
+                guard spelling == "EOR" || spelling == "EOH" else {
+                    let literal = text(tagStart..<tag.end)
+                    warn(.unexpectedTextBetweenFields(text: literal))
+                    if result.fields.isEmpty {
+                        result.leadingText += literal
+                    } else {
+                        result.fields[result.fields.count - 1].trailingText += literal
+                    }
+                    advance(to: tag.end)
+                    continue
+                }
+
                 advance(to: tag.end)
                 let next = indexOfNextTagStart(from: index) ?? scalars.count
                 result.terminatorSpelling = tag.spelling
