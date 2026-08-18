@@ -9,10 +9,20 @@ import ADIFKit
 /// is untouched until Save (§6.1).
 final class GridViewController: NSViewController {
 
-    /// Unowned rather than weak: the document owns the window controller that owns this,
-    /// so it outlives the grid by construction, and an optional here would put a `?` on
-    /// every cell lookup for a case that cannot happen.
-    unowned let document: LogDocument
+    /// Weak, and the optionality is the point.
+    ///
+    /// This was `unowned`, on the reasoning that the document owns the window controller
+    /// that owns this, so it outlives the grid by construction. That is true of the
+    /// ownership graph and not of deallocation order: an `NSWindow` is routinely held by
+    /// the autorelease pool to the end of the event-loop iteration, while
+    /// `NSDocumentController` releases the document inside that same iteration. Anything
+    /// the table view asks in the gap — `numberOfRows`, `viewFor` — would trap on an
+    /// `unowned` reference rather than get a stale answer, and a trap is a crash on ⌘W.
+    ///
+    /// No call was found that provably lands in that gap, since `NSTableView` nils its own
+    /// data source as it deallocates. This is closing the hole rather than the path to it:
+    /// the honest answer to "how many rows" when the document is gone is none.
+    weak var document: LogDocument?
 
     let tableView = NSTableView()
 
@@ -75,7 +85,7 @@ final class GridViewController: NSViewController {
     /// clicking it goes descending because AppKit reverses what it still believes is in
     /// effect. So the document owns the fact and this follows it.
     private func showSortIndicator() {
-        let wanted = document.sortedBy.map {
+        let wanted = document?.sortedBy.map {
             [NSSortDescriptor(key: $0.column, ascending: $0.ascending)]
         } ?? []
 
@@ -95,6 +105,8 @@ final class GridViewController: NSViewController {
     /// deleted would be a second surprise on top of the deletion, and the user may well
     /// be about to type a value back into it.
     private func addAnyNewColumns() {
+        guard let document else { return }
+
         let newNames = document.log.columnNames.filter { !columns.contains($0) }
         guard !newNames.isEmpty else { return }
 
@@ -230,7 +242,7 @@ final class GridViewController: NSViewController {
     /// Runs the search and moves to the first match at or after where the operator is,
     /// rather than jumping to the top of the log every keystroke.
     private func search(for text: String) {
-        matches = document.log.find(text)
+        matches = document?.log.find(text) ?? FindMatches()
 
         guard !text.isEmpty else {
             findBar.showStatus(position: nil, of: nil)
@@ -254,7 +266,7 @@ final class GridViewController: NSViewController {
     private func step(_ move: (FindMatches, Int?) -> Int?) {
         // Recomputed rather than trusted: rows may have been edited, sorted or deleted
         // since the text was typed, and a stale index would select an unrelated QSO.
-        matches = document.log.find(findBar.searchText)
+        matches = document?.log.find(findBar.searchText) ?? FindMatches()
         select(match: move(matches, tableView.selectedRow >= 0 ? tableView.selectedRow : nil))
     }
 
@@ -327,7 +339,7 @@ final class GridViewController: NSViewController {
 
     @objc private func deleteClickedRows(_ sender: Any?) {
         guard !contextRows.isEmpty else { return }
-        document.deleteRecords(at: contextRows)
+        document?.deleteRecords(at: contextRows)
         tableView.deselectAll(nil)
     }
 
@@ -336,7 +348,7 @@ final class GridViewController: NSViewController {
     private func buildColumns() {
         let rowNumbers = NSTableColumn(identifier: Self.rowNumberColumn)
         rowNumbers.title = "#"
-        rowNumbers.width = width(forRowNumbersUpTo: document.log.records.count)
+        rowNumbers.width = width(forRowNumbersUpTo: document?.log.records.count ?? 0)
         rowNumbers.resizingMask = .userResizingMask
         tableView.addTableColumn(rowNumbers)
 
@@ -360,7 +372,7 @@ final class GridViewController: NSViewController {
     /// and column widths are a starting point the user can drag anyway.
     private func width(forColumnNamed name: String) -> CGFloat {
         var widest = measure(name, font: Self.headerFont)
-        for record in document.log.records.prefix(200) {
+        for record in (document?.log.records ?? []).prefix(200) {
             guard let value = record[name], !value.isEmpty else { continue }
             widest = max(widest, measure(value, font: Self.cellFont))
         }
@@ -390,7 +402,7 @@ final class GridViewController: NSViewController {
 extension GridViewController: NSTableViewDataSource {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        document.log.records.count
+        document?.log.records.count ?? 0
     }
 
     /// Header clicks arrive here. The sort is done by the document rather than the view
@@ -401,7 +413,7 @@ extension GridViewController: NSTableViewDataSource {
         guard let descriptor = tableView.sortDescriptors.first,
               let column = descriptor.key else { return }
 
-        document.sortRecords(byColumn: column, ascending: descriptor.ascending)
+        document?.sortRecords(byColumn: column, ascending: descriptor.ascending)
     }
 }
 
@@ -493,7 +505,7 @@ extension GridViewController: NSTableViewDelegate {
             // The distinction is real and the writer depends on it (decision 2), but it
             // is not something the grid can usefully show.
             cell.textField?.stringValue =
-                document.log.records[row][tableColumn.identifier.rawValue] ?? ""
+                document?.log.records[row][tableColumn.identifier.rawValue] ?? ""
             cell.textField?.alignment = .left
             cell.textField?.textColor = .labelColor
             cell.textField?.isEditable = true
@@ -508,7 +520,7 @@ extension GridViewController: NSTableViewDelegate {
         let selection = tableView.selectedRowIndexes
         guard !selection.isEmpty else { return }
 
-        document.deleteRecords(at: selection)
+        document?.deleteRecords(at: selection)
         tableView.deselectAll(nil)
     }
 
@@ -567,7 +579,7 @@ extension GridViewController: NSTableViewDelegate {
         let identifier = tableView.tableColumns[column].identifier
         guard identifier != Self.rowNumberColumn else { return }
 
-        document.setValue(sender.stringValue,
+        document?.setValue(sender.stringValue,
                           forColumn: identifier.rawValue,
                           inRecordAt: row)
     }

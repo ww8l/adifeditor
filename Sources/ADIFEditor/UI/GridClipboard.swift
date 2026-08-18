@@ -23,7 +23,7 @@ extension GridViewController {
 
     @objc func cut(_ sender: Any?) {
         let rows = targetRows(for: sender)
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty, let document else { return }
 
         copyRows(rows)
         document.deleteRecords(at: rows)
@@ -31,6 +31,8 @@ extension GridViewController {
     }
 
     @objc func paste(_ sender: Any?) {
+        guard let document else { return }
+
         let incoming = Self.recordsOnPasteboard()
         guard !incoming.isEmpty else {
             // Nothing parseable. §6.4: say so quietly rather than crashing or silently
@@ -55,7 +57,7 @@ extension GridViewController {
     // MARK: - Pasteboard
 
     private func copyRows(_ rows: IndexSet) {
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty, let document else { return }
 
         let records = rows.compactMap { row -> ADIFRecord? in
             document.log.records.indices.contains(row) ? document.log.records[row] : nil
