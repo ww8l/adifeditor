@@ -73,11 +73,13 @@ Xcode install; with Xcode present, plain `swift test` also works.
 
 ## Installing
 
-**No release has been published yet.** Until one is, building from source (below) is the
-only way to get the app. When releases begin, they will be `.dmg` files on the
-[Releases](../../releases) page.
+Download the latest `.dmg` from the [Releases](../../releases) page. It is a universal
+build — Apple Silicon and Intel — and needs macOS 14 or later.
 
 Open the `.dmg` and drag **ADIF Editor** onto the **Applications** shortcut beside it.
+
+Building from source works too and is described [below](#building-the-app-from-source);
+the only thing it needs is Swift, since the project has no dependencies.
 
 ### First launch: macOS will block it
 
