@@ -8,10 +8,14 @@ import ADIFKit
 enum ParseWarningText {
 
     /// One line summarizing a file's warnings, for the banner under the title bar.
-    static func summary(_ warnings: [ADIFWarning]) -> String {
+    ///
+    /// `suppressed` is what the parser's cap dropped. It is added to the count rather
+    /// than ignored: a file with a hundred thousand problems that says "and 99 others"
+    /// is telling the operator something false about their file.
+    static func summary(_ warnings: [ADIFWarning], suppressed: Int = 0) -> String {
         guard let first = warnings.first else { return "" }
-        guard warnings.count > 1 else { return describe(first) }
-        let others = warnings.count - 1
+        let others = warnings.count - 1 + suppressed
+        guard others > 0 else { return describe(first) }
         let plural = others == 1 ? "problem" : "problems"
         return "\(describe(first)) (and \(others) other \(plural))"
     }

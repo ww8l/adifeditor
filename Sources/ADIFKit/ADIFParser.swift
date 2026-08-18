@@ -33,43 +33,46 @@ public enum ADIFParser {
 
         var document = ADIFDocument(byteOrderMark: byteOrderMark)
 
-        // Decide whether the file has a header by scanning to the first terminator tag
-        // and seeing which one it is.
-        //
-        // §8's stated rule — "if the first non-whitespace character is `<`, there is no
-        // header" — misclassifies a file that opens directly with `<EOH>`, which is a
-        // file with an empty header, not a headerless one. Several fixtures do exactly
-        // that. Looking at the terminator handles both shapes correctly.
         // Everything the scanner is handed from here is offset by the BOM that was just
         // taken off the front, so warnings can name a byte of the file rather than a byte
         // of what is left of it (§6.4).
         let bomWidth = byteOrderMark ? 3 : 0
 
-        var probe = ADIFScanner(text: text)
-        let first = probe.scanFieldsToTerminator()
+        // Whether the file has a header is decided by the first terminator tag, not by
+        // §8's stated rule — "if the first non-whitespace character is `<`, there is no
+        // header" misclassifies a file that opens directly with `<EOH>`, which is a file
+        // with an *empty* header rather than a headerless one. Several fixtures do
+        // exactly that.
+        //
+        // One scan answers it. There used to be a throwaway probe scan first, purely to
+        // ask that question, and then the file was scanned again from the top — so every
+        // per-scalar step in the scanner was paid twice on every file opened. The scan
+        // result is both the answer and the content, whichever way the answer comes out.
+        var scanner = ADIFScanner(text: text, startingAtByte: bomWidth)
+        let first = scanner.scanFieldsToTerminator()
         let firstIsHeader = first.terminatorSpelling.map {
             ADIFField.normalize($0) == "EOH"
         } ?? false
 
-        var scanner = ADIFScanner(text: text, startingAtByte: bomWidth)
         if firstIsHeader {
-            // Re-scan so the header's own text is captured verbatim, including any
-            // comment text and the terminator's trailing newline.
-            let headerResult = scanner.scanFieldsToTerminator()
-            document.header = renderHeader(headerResult)
-            document.warnings.append(contentsOf: scanner.warnings)
-            scanner.warnings.removeAll()
-        } else if let firstTag = text.firstIndex(of: "<") {
-            // No `<EOH>`. Anything before the first tag is still bytes in the user's
-            // file — carry it as header text so it survives the round trip.
-            let preamble = String(text[text.startIndex..<firstTag])
-            document.header = preamble.isEmpty ? nil : preamble
-            scanner = ADIFScanner(text: String(text[firstTag...]),
-                                  startingAtByte: bomWidth + preamble.utf8.count)
+            // The header's own text, verbatim: comment text, field spellings, the
+            // terminator and its trailing newline.
+            document.header = renderHeader(first)
         } else {
-            // No tags at all: the whole file is preamble.
-            document.header = text
-            return document
+            // No `<EOH>`, so what was just scanned is the first record, and anything
+            // before its first tag is still bytes in the user's file — carried as header
+            // text so it survives the round trip. A file with no tags at all lands here
+            // too, as leading text and nothing else.
+            document.header = first.leadingText.isEmpty ? nil : first.leadingText
+
+            if !first.isEmpty {
+                document.records.append(
+                    ADIFRecord(fields: first.fields,
+                               terminatorSpelling: first.terminatorSpelling ?? "EOR",
+                               trailingText: first.trailingText,
+                               isTruncated: first.terminatorSpelling == nil)
+                )
+            }
         }
 
         while !scanner.isAtEnd {
@@ -98,6 +101,7 @@ public enum ADIFParser {
         }
 
         document.warnings.append(contentsOf: scanner.warnings)
+        document.suppressedWarnings = scanner.suppressedWarnings
         liftFinalSeparator(&document)
         return document
     }

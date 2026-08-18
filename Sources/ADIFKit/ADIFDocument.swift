@@ -29,21 +29,33 @@ public struct ADIFDocument: Equatable, Sendable {
     /// entirely on one line has no separators to speak of and is left alone.
     public var endsWithoutFinalSeparator: Bool
 
-    /// Non-fatal problems found while parsing. Empty for a well-formed file.
+    /// Non-fatal problems found while parsing. Empty for a well-formed file, and capped
+    /// at `ADIFScanner.warningLimit` — see `suppressedWarnings`.
     public var warnings: [ADIFWarning]
+
+    /// How many further warnings were found and not kept.
+    ///
+    /// A file that is not ADIF has a defect roughly every few bytes: 750 KB of an HTML
+    /// error page — the shape §6.4 names as its own example — produced a hundred thousand
+    /// warnings, an array nobody reads to the end of. The list is capped, and this counts
+    /// what the cap dropped so the banner can still say how many problems there were.
+    /// Reporting "and 99 others" when there were 100,000 would be worse than a long array.
+    public var suppressedWarnings: Int
 
     public init(
         header: String? = nil,
         records: [ADIFRecord] = [],
         byteOrderMark: Bool = false,
         endsWithoutFinalSeparator: Bool = false,
-        warnings: [ADIFWarning] = []
+        warnings: [ADIFWarning] = [],
+        suppressedWarnings: Int = 0
     ) {
         self.header = header
         self.records = records
         self.byteOrderMark = byteOrderMark
         self.endsWithoutFinalSeparator = endsWithoutFinalSeparator
         self.warnings = warnings
+        self.suppressedWarnings = suppressedWarnings
     }
 
     /// The union of every field name present anywhere in the file, ordered by merging

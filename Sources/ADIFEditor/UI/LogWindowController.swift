@@ -66,7 +66,8 @@ final class LogWindowController: NSWindowController {
         installToolbar()
 
         if !document.warnings.isEmpty {
-            addWarningBanner(text: ParseWarningText.summary(document.warnings))
+            addWarningBanner(text: ParseWarningText.summary(
+                document.warnings, suppressed: document.log.suppressedWarnings))
         }
 
         // After the toolbar and any banner, so it includes their height.
