@@ -311,6 +311,22 @@ struct QRZSessionTests {
         }
     }
 
+    @Test("a response redacts its session key when printed")
+    func responsesRedactTheSessionKeyWhenPrinted() {
+        // The mirror of the password's test. A session key is a bearer credential — it
+        // queries QRZ as this account until it expires — and the plan on record is to
+        // capture real responses into fixtures, which is exactly how a live one would
+        // enter a history that cannot be rewritten once this repo is public.
+        let key = "3bd4a1e6f8c0d2b5a7e9f1c3d5b7a9e1"
+        let response = QRZResponse(callsign: nil, sessionKey: key,
+                                   error: nil, message: "hello")
+
+        #expect(!"\(response)".contains(key))
+        #expect(!String(reflecting: response).contains(key))
+        #expect(!response.description.contains(key))
+        #expect(response.sessionKey == key, "and it is still there for the code that needs it")
+    }
+
     @Test("credentials redact their password when printed")
     func credentialsRedactWhenPrinted() {
         // The likeliest leak is not a considered decision but a stray interpolation.

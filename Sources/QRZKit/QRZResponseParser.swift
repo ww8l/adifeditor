@@ -7,11 +7,30 @@ import Foundation
 /// when the lookup succeeded. Errors arrive inside `<Session><Error>` as human text
 /// rather than as a code, which is why classifying them is a separate step (`QRZSession`)
 /// from reading them.
-public struct QRZResponse: Equatable, Sendable {
+public struct QRZResponse: Equatable, Sendable, CustomStringConvertible,
+                          CustomDebugStringConvertible {
     public let callsign: QRZCallsign?
     public let sessionKey: String?
     public let error: String?
     public let message: String?
+
+    /// Redacts the session key, the way `QRZCredentials` redacts the password (§6.5).
+    ///
+    /// A session key is a bearer credential: anyone holding it can query QRZ as this
+    /// account until it expires. Nothing prints one today — there is not a `print`,
+    /// `NSLog` or `debugPrint` anywhere in `Sources/` — but the leak that matters is not
+    /// a considered decision, it is a stray interpolation into a diagnostic, and the
+    /// plan on record is to capture real QRZ responses into fixtures. That is exactly how
+    /// a live key would enter a history that, once this repo is public, cannot be
+    /// rewritten. Reading the key requires asking for `sessionKey` by name, which is easy
+    /// to spot in review.
+    public var description: String {
+        let key = sessionKey == nil ? "nil" : "••••••"
+        return "QRZResponse(callsign: \(callsign?.call ?? "nil"), sessionKey: \(key), "
+             + "error: \(error ?? "nil"), message: \(message ?? "nil"))"
+    }
+
+    public var debugDescription: String { description }
 }
 
 /// Reads QRZ's XML.
