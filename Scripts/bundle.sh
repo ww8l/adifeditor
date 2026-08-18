@@ -23,7 +23,9 @@ set -eu
 
 CONFIGURATION="${1:-debug}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/.build/ADIF Editor.app"
+# Overridable so a checking build can go somewhere disposable rather than replacing the
+# bundle that is routinely open on this machine — see Scripts/ci-local.sh.
+APP="${BUNDLE_DEST:-$ROOT/.build/ADIF Editor.app}"
 DMG="$ROOT/.build/ADIF Editor.dmg"
 
 # §5's minimum. Spelled into the triples below so a release build cannot silently
@@ -94,10 +96,30 @@ do
     name="${spec#* }"
     sips -z "$px" "$px" "$ROOT/Support/Icon/AppIcon-1024.png" \
         --out "$ICONSET/$name.png" >/dev/null
+
+    # `sips` prints "not a valid file - skipping" and exits 0 when it cannot read the
+    # source, so `set -e` never sees a size go missing. What ships then is an app whose
+    # Dock icon silently falls back to a smaller bitmap — the exact thing the @2x entries
+    # above exist to prevent.
+    [ -s "$ICONSET/$name.png" ] \
+        || { echo "error: icon size ${px}px ($name) was not produced" >&2; exit 1; }
 done
 
-iconutil --convert icns "$ICONSET" --output "$APP/Contents/Resources/AppIcon.icns"
+ICNS="$APP/Contents/Resources/AppIcon.icns"
+iconutil --convert icns "$ICONSET" --output "$ICNS"
 rm -rf "$ICONSET"
+
+# And `iconutil` exits 0 on an iconset holding only some of the representations, writing
+# a 4 KB .icns where a complete one is ~150 KB. Converting back is the direct question —
+# how many representations does the file actually hold — rather than a guess at a size
+# floor that a future icon could fall under honestly.
+VERIFY="$ROOT/.build/AppIcon-verify.iconset"
+rm -rf "$VERIFY"
+iconutil --convert iconset "$ICNS" --output "$VERIFY"
+REPRESENTATIONS="$(find "$VERIFY" -name '*.png' | wc -l | tr -d ' ')"
+rm -rf "$VERIFY"
+[ "$REPRESENTATIONS" -eq 10 ] \
+    || { echo "error: AppIcon.icns holds $REPRESENTATIONS of 10 representations" >&2; exit 1; }
 
 cp "$BIN" "$APP/Contents/MacOS/ADIFEditor"
 cp "$ROOT/Support/Info.plist" "$APP/Contents/Info.plist"
