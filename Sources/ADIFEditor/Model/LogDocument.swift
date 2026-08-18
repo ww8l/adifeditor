@@ -21,6 +21,16 @@ final class LogDocument: NSDocument {
 
     private(set) var log = ADIFDocument()
 
+    /// Every column this document has shown, in the order the grid shows them.
+    ///
+    /// Only ever grows, exactly like the grid's own columns. That is the point: a column
+    /// whose last remaining value is cleared leaves the *file*, so `log.columnNames` can
+    /// no longer say where it belonged — and retyping the value would append the field to
+    /// the end of the record, changing bytes nobody edited (§6.2a) and moving the column
+    /// to the far right on the next open. Remembering the order for the life of the
+    /// window is what a spreadsheet does, and it costs one array.
+    private(set) var columnOrder: [String] = []
+
     /// Problems the parser recovered from while opening this file. Surfaced by the
     /// window controller rather than thrown, because the file did open (§6.4).
     private(set) var warnings: [ADIFWarning] = []
@@ -42,6 +52,7 @@ final class LogDocument: NSDocument {
         MainActor.assumeIsolated {
             log = parsed
             warnings = parsed.warnings
+            columnOrder = parsed.columnNames
         }
     }
 
@@ -88,10 +99,31 @@ final class LogDocument: NSDocument {
     /// takes the file's own spelling — is ADIFKit's to decide and is tested there. This
     /// only wraps the result in undo.
     func setValue(_ newValue: String, forColumn column: String, inRecordAt index: Int) {
+        rememberColumns()
         guard let edited = log.recordBySettingValue(newValue,
                                                     forColumn: column,
-                                                    inRecordAt: index) else { return }
+                                                    inRecordAt: index,
+                                                    columnOrder: columnOrder) else { return }
         replaceRecord(at: index, with: edited, actionName: "Edit \(column)")
+    }
+
+    /// Folds any column the log has gained into the remembered order, in the place the
+    /// records give it. Pasted QSOs can carry a field nothing else in the file had.
+    private func rememberColumns() {
+        let current = log.columnNames
+        guard current != columnOrder else { return }
+
+        var merged = columnOrder
+        var anchor = -1
+        for name in current {
+            if let known = merged.firstIndex(of: name) {
+                anchor = known
+                continue
+            }
+            merged.insert(name, at: anchor + 1)
+            anchor += 1
+        }
+        columnOrder = merged
     }
 
     /// The single undoable mutation. Everything that changes a record goes through here.

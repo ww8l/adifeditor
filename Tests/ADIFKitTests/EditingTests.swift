@@ -19,6 +19,64 @@ struct EditingTests {
         String(decoding: ADIFWriter.write(document), as: UTF8.self)
     }
 
+    // MARK: - Where a re-added field lands
+
+    @Test("a field only one record carried comes back where it was")
+    func singletonFieldKeepsItsPlace() throws {
+        // Decision 14's symptom, one step removed. Clearing STATE takes the column out of
+        // the file entirely — no record carries it any more — so the merged order has
+        // nothing to say about where it belongs, and retyping the same value appended it
+        // to the end. The file then differed from the one opened although the data was
+        // identical, and on the next open the column appeared at the far right, which is
+        // exactly what decision 14 exists to prevent.
+        let original = "<CALL:5>W1ABC <STATE:2>MI <MODE:3>FT8 <EOR>\n"
+                     + "<CALL:5>K2XYZ <MODE:3>FT8 <EOR>\n"
+        var document = try parse(original)
+        let orderTheGridShows = document.columnNames
+        #expect(orderTheGridShows == ["CALL", "STATE", "MODE"])
+
+        document.records[0] = try #require(document.recordBySettingValue(
+            "", forColumn: "STATE", inRecordAt: 0))
+        #expect(!document.columnNames.contains("STATE"), "the column has left the file")
+
+        let restored = try #require(document.recordBySettingValue(
+            "MI", forColumn: "STATE", inRecordAt: 0, columnOrder: orderTheGridShows))
+        #expect(restored.fields.map(\.name) == ["CALL", "STATE", "MODE"])
+
+        document.records[0] = restored
+        #expect(text(document) == original, "clear then retype is not an edit to the file")
+    }
+
+    @Test("without a remembered order the field can only go on the end")
+    func singletonFieldWithoutAnOrder() throws {
+        // Documents why the parameter exists rather than pretending the fallback is
+        // right: with the column gone from every record there is genuinely nothing to
+        // take a position from, so this is the honest answer to a question with no data.
+        var document = try parse("<CALL:5>W1ABC <STATE:2>MI <MODE:3>FT8 <EOR>\n")
+        document.records[0] = try #require(document.recordBySettingValue(
+            "", forColumn: "STATE", inRecordAt: 0))
+
+        let appended = try #require(document.recordBySettingValue(
+            "MI", forColumn: "STATE", inRecordAt: 0))
+        #expect(appended.fields.map(\.name) == ["CALL", "MODE", "STATE"])
+    }
+
+    @Test("a column another record still carries needs no help")
+    func sharedFieldKeepsItsPlaceUnaided() throws {
+        // The case that already worked, kept so the new parameter cannot quietly become
+        // the only thing holding the rule up.
+        let original = "<CALL:5>W1ABC <STATE:2>MI <MODE:3>FT8 <EOR>\n"
+                     + "<CALL:5>K2XYZ <STATE:2>OH <MODE:3>FT8 <EOR>\n"
+        var document = try parse(original)
+        document.records[0] = try #require(document.recordBySettingValue(
+            "", forColumn: "STATE", inRecordAt: 0))
+        document.records[0] = try #require(document.recordBySettingValue(
+            "MI", forColumn: "STATE", inRecordAt: 0))
+
+        #expect(document.records[0].fields.map(\.name) == ["CALL", "STATE", "MODE"])
+        #expect(text(document) == original)
+    }
+
     // MARK: - Changing a value
 
     @Test("editing a value leaves the rest of the record alone")

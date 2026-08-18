@@ -22,10 +22,19 @@ extension ADIFDocument {
     ///     that arrived in the file survives untouched;
     ///   - typing into a cell whose field is absent **adds the field**, spelled the way
     ///     the rest of the file spells it (decision 3).
+    ///
+    /// `columnOrder` says where a re-added field belongs. Left out, the order is merged
+    /// from the records themselves, which has no answer for a field that exactly one
+    /// record carried: clearing that cell takes the column out of the file entirely, so
+    /// retyping the same value appends the field to the end of the record and the file
+    /// no longer matches the one that was opened — decision 14's own symptom, one step
+    /// removed. The grid keeps its columns for the life of the window and can say where
+    /// the column was, so the app passes that in.
     public func recordBySettingValue(
         _ newValue: String,
         forColumn column: String,
-        inRecordAt index: Int
+        inRecordAt index: Int,
+        columnOrder: [String]? = nil
     ) -> ADIFRecord? {
         guard records.indices.contains(index) else { return nil }
 
@@ -44,7 +53,9 @@ extension ADIFDocument {
         } else {
             record.insertField(named: spelling(forColumn: column),
                                value: newValue,
-                               at: position(forColumn: column, in: record))
+                               at: position(forColumn: column,
+                                            in: record,
+                                            using: columnOrder ?? columnNames))
         }
 
         return record
@@ -96,10 +107,12 @@ extension ADIFDocument {
     /// between `QSL_MANUAL` and `mode`, where the file's other records keep it, rather
     /// than at the end of the record.
     ///
-    /// Falls back to the end of the record when no other record carries the field, which
-    /// is the genuinely new column case — there is nothing to take a position from.
-    private func position(forColumn column: String, in record: ADIFRecord) -> Int {
-        let order = columnNames
+    /// Falls back to the end of the record when `order` does not mention the field at
+    /// all, which is the genuinely new column case — there is nothing to take a position
+    /// from.
+    private func position(forColumn column: String,
+                          in record: ADIFRecord,
+                          using order: [String]) -> Int {
         var rank: [String: Int] = [:]
         for (index, name) in order.enumerated() { rank[name] = index }
 
