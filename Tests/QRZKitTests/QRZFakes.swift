@@ -49,6 +49,40 @@ final class FakeTransport: QRZTransport, @unchecked Sendable {
     }
 }
 
+/// A transport that cancels the task it is running on, the way pressing Cancel does.
+///
+/// `URLSession.data(for:)` throws `URLError(.cancelled)` when its task is cancelled, and
+/// `URLSessionTransport` reports that as `QRZError.transportFailure` — an error that
+/// stops a batch and looks exactly like the network going away. This reproduces that
+/// sequence without a socket: cancel, then fail as a transport failure.
+final class CancellingTransport: QRZTransport, @unchecked Sendable {
+
+    private let cancelOnCall: Int
+    private let body: String
+    private let lock = NSLock()
+    private var callCount = 0
+
+    /// - Parameter cancelOnCall: 1-based, counting the authentication request.
+    init(cancelOnCall: Int, body: String) {
+        self.cancelOnCall = cancelOnCall
+        self.body = body
+    }
+
+    var requestCount: Int { lock.withLock { callCount } }
+
+    func get(_ url: URL) async throws -> Data {
+        let call = lock.withLock { () -> Int in
+            callCount += 1
+            return callCount
+        }
+
+        guard call == cancelOnCall else { return Data(body.utf8) }
+
+        withUnsafeCurrentTask { $0?.cancel() }
+        throw QRZError.transportFailure("cancelled")
+    }
+}
+
 /// QRZ's responses, in the shapes the service documents.
 ///
 /// Hand-built rather than captured — see §11. Kept in one place so a real capture can

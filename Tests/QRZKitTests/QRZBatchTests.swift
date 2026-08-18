@@ -95,6 +95,30 @@ struct QRZBatchTests {
         #expect(result.notAttempted == ["K2XYZ", "N3DEF"])
     }
 
+    @Test("cancelling mid-request is reported as cancellation, not as a network failure")
+    func cancelDuringARequestReadsAsCancellation() async {
+        // Cancel reaches URLSession, which throws URLError(.cancelled), which arrives as
+        // a transport failure — so the operator who pressed Cancel was told "Could not
+        // reach QRZ: cancelled. 54 callsigns were not tried", a network diagnosis of
+        // something they did on purpose. The clean message only appeared when Cancel
+        // happened to land in the 100 ms gap between requests, which is most of a second
+        // apart on a long log.
+        let transport = CancellingTransport(cancelOnCall: 3,
+                                            body: QRZFixtures.callsign("W1ABC"))
+        let session = QRZSession(credentials: QRZCredentials(username: "ww8l",
+                                                             password: "secret"),
+                                 transport: transport)
+
+        let result = await QRZBatch.lookUp(["W1ABC", "K2XYZ", "N3DEF"],
+                                           using: session,
+                                           pause: .zero)
+
+        #expect(result.wasCancelled)
+        #expect(result.stoppedEarly == nil, "not a failure to report — a decision")
+        #expect(result.found.keys.contains("W1ABC"), "what was already fetched is kept")
+        #expect(result.notAttempted == ["K2XYZ", "N3DEF"])
+    }
+
     @Test("the batch never throws, whatever happens")
     func neverThrows() async {
         // §6.4. The caller has partial results to show and a reason to display; there is

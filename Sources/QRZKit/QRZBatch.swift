@@ -90,6 +90,19 @@ public enum QRZBatch {
 
             do {
                 found[callsign] = try await session.lookup(callsign)
+            } catch _ where Task.isCancelled {
+                // Cancelling mid-request reaches URLSession, which throws
+                // URLError(.cancelled), which the transport reports as a network failure
+                // — so the operator who pressed Cancel was told "Could not reach QRZ:
+                // cancelled. 54 callsigns were not tried", a diagnosis of something they
+                // did on purpose. The clean message only appeared when Cancel happened to
+                // land in the 100 ms gap between requests. What the task knows outranks
+                // what the error looks like.
+                return QRZBatchResult(found: found,
+                                      failures: failures,
+                                      stoppedEarly: nil,
+                                      notAttempted: Array(callsigns[index...]),
+                                      wasCancelled: true)
             } catch let error as QRZError where !error.stopsBatch {
                 failures.append(QRZLookupFailure(callsign: callsign, error: error))
             } catch let error as QRZError {
