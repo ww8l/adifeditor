@@ -186,6 +186,23 @@ struct QRZSessionTests {
         #expect(transport.requestCount == 0)
     }
 
+    @Test("a username with no password counts as no credentials")
+    func blankPasswordIsNotConfigured() async throws {
+        // The mirror of the test above, and not redundant with it: both of the others
+        // fail on the username, so nothing exercised the password half and deleting it
+        // from `isUsable` survived the whole suite. Someone who typed a username into
+        // Settings and no password would spend a real request against QRZ on credentials
+        // that cannot work — §6.5's one bullet the OS no longer enforces.
+        let transport = FakeTransport(body: QRZFixtures.session())
+        let subject = QRZSession(credentials: QRZCredentials(username: "ww8l", password: ""),
+                                 transport: transport)
+
+        await #expect(throws: QRZError.notConfigured) {
+            try await subject.lookup("W1ABC")
+        }
+        #expect(transport.requestCount == 0)
+    }
+
     @Test("a blank callsign is refused before a request is spent on it")
     func blankCallsign() async throws {
         let transport = FakeTransport(body: QRZFixtures.session())
