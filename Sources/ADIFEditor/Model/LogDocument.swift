@@ -35,6 +35,21 @@ final class LogDocument: NSDocument {
     /// window controller rather than thrown, because the file did open (§6.4).
     private(set) var warnings: [ADIFWarning] = []
 
+    /// The column the records are in order by, if a sort put them there, and `nil` if
+    /// they are in the order the file gave them or an edit has since broken it.
+    ///
+    /// Part of the undoable state rather than the view's own memory, because the sort
+    /// *is* a change to the records (see `sortRecords`) and undoing it puts them back.
+    /// A header arrow the undo does not clear claims a sort that is not in effect, and
+    /// the next click on that header then reverses a sort that was undone — it goes
+    /// descending where the visible arrow says it should go ascending.
+    private(set) var sortedBy: Sort?
+
+    struct Sort: Equatable {
+        let column: String
+        let ascending: Bool
+    }
+
     // MARK: - Reading and writing
 
     override func read(from data: Data, ofType typeName: String) throws {
@@ -136,17 +151,41 @@ final class LogDocument: NSDocument {
     func replaceRecord(at index: Int, with record: ADIFRecord, actionName: String) {
         guard log.records.indices.contains(index) else { return }
 
+        // Typing a new value into the column the log is sorted on can put that row out of
+        // order without moving it, so the header would go on claiming an order that no
+        // longer holds. Conservative on purpose: an edit that happens to leave the order
+        // intact still clears the arrow, because knowing better would mean re-sorting the
+        // whole log on every keystroke to answer a question about one arrow.
+        let stillSorted = sortedBy.map { record[$0.column] == log.records[index][$0.column] }
+            ?? false
+
+        replaceRecord(at: index, with: record, actionName: actionName,
+                      sortedBy: stillSorted ? sortedBy : nil)
+    }
+
+    /// The same edit with the resulting order stated rather than inferred, which is what
+    /// undo needs: restoring the record and restoring the arrow have to happen before the
+    /// notification goes out, or the grid redraws against half-restored state.
+    private func replaceRecord(at index: Int,
+                               with record: ADIFRecord,
+                               actionName: String,
+                               sortedBy newSort: Sort?) {
+        guard log.records.indices.contains(index) else { return }
+
         let previous = log.records[index]
+        let previousSort = sortedBy
         guard previous != record else { return }
 
         undoManager?.registerUndo(withTarget: self) { document in
             // Registering during undo is what gives redo for free: AppKit routes this
             // second registration onto the redo stack.
-            document.replaceRecord(at: index, with: previous, actionName: actionName)
+            document.replaceRecord(at: index, with: previous, actionName: actionName,
+                                   sortedBy: previousSort)
         }
         undoManager?.setActionName(actionName)
 
         log.records[index] = record
+        sortedBy = newSort
 
         NotificationCenter.default.post(
             name: Self.recordsDidChange,
@@ -162,7 +201,8 @@ final class LogDocument: NSDocument {
     /// pressed (§6.1, owner's ruling), like every other change.
     func sortRecords(byColumn column: String, ascending: Bool) {
         replaceAllRecords(log.recordsSorted(byColumn: column, ascending: ascending),
-                          actionName: "Sort by \(column)")
+                          actionName: "Sort by \(column)",
+                          sortedBy: Sort(column: column, ascending: ascending))
     }
 
     /// Deletes rows. The one destructive operation in the app, and undoable like the rest.
@@ -170,7 +210,10 @@ final class LogDocument: NSDocument {
         guard !indexes.isEmpty else { return }
 
         let name = indexes.count == 1 ? "Delete QSO" : "Delete \(indexes.count) QSOs"
-        replaceAllRecords(log.recordsByDeleting(at: indexes), actionName: name)
+        // Removing rows from a sorted list leaves a sorted list, so the header keeps its
+        // arrow — deleting a QSO is not a reason for the grid to forget how it is ordered.
+        replaceAllRecords(log.recordsByDeleting(at: indexes), actionName: name,
+                          sortedBy: sortedBy)
     }
 
     /// Inserts QSOs at a row, and reports where they landed so the grid can select them.
@@ -184,7 +227,9 @@ final class LogDocument: NSDocument {
         var records = log.records
         records.insert(contentsOf: incoming, at: position)
 
-        replaceAllRecords(records, actionName: actionName)
+        // Pasted QSOs land where the cursor is, not where the sort would put them, so
+        // whatever order held before this no longer does.
+        replaceAllRecords(records, actionName: actionName, sortedBy: nil)
         return IndexSet(integersIn: position..<(position + incoming.count))
     }
 
@@ -193,16 +238,24 @@ final class LogDocument: NSDocument {
     ///
     /// Snapshots the entire list. That is the honest cost of undoable sorting: the order
     /// is the thing being changed, so there is nothing smaller to remember.
-    func replaceAllRecords(_ records: [ADIFRecord], actionName: String) {
+    /// `sortedBy` is the order the new list is in, and it is snapshotted and restored
+    /// alongside the records for the same reason they are: it is part of what the change
+    /// changed, so undo has to put it back too. Callers that break the order pass `nil`.
+    func replaceAllRecords(_ records: [ADIFRecord],
+                           actionName: String,
+                           sortedBy newSort: Sort?) {
         let previous = log.records
+        let previousSort = sortedBy
         guard previous != records else { return }
 
         undoManager?.registerUndo(withTarget: self) { document in
-            document.replaceAllRecords(previous, actionName: actionName)
+            document.replaceAllRecords(previous, actionName: actionName,
+                                       sortedBy: previousSort)
         }
         undoManager?.setActionName(actionName)
 
         log.records = records
+        sortedBy = newSort
 
         NotificationCenter.default.post(name: Self.recordsDidChange, object: self)
     }

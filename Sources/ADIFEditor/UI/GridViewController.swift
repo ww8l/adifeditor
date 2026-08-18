@@ -54,6 +54,7 @@ final class GridViewController: NSViewController {
     /// document's notification is what stops that from being two code paths.
     @objc private func recordsDidChange(_ notification: Notification) {
         addAnyNewColumns()
+        showSortIndicator()
 
         guard let row = notification.userInfo?[LogDocument.changedRowKey] as? Int,
               row < tableView.numberOfRows else {
@@ -64,6 +65,25 @@ final class GridViewController: NSViewController {
             forRowIndexes: IndexSet(integer: row),
             columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns)
         )
+    }
+
+    /// Puts the header's arrow where the document says the order actually is.
+    ///
+    /// The arrow is not the grid's to remember. `NSTableView` keeps whatever descriptor
+    /// the last header click set, and the sort it describes can be undone out from under
+    /// it — after which the header claims an order the records are no longer in, and
+    /// clicking it goes descending because AppKit reverses what it still believes is in
+    /// effect. So the document owns the fact and this follows it.
+    private func showSortIndicator() {
+        let wanted = document.sortedBy.map {
+            [NSSortDescriptor(key: $0.column, ascending: $0.ascending)]
+        } ?? []
+
+        // Assigning re-enters `sortDescriptorsDidChange`, which would sort an already
+        // sorted log — harmless, since the document drops a no-op change, but there is no
+        // reason to make the round trip when nothing differs.
+        guard tableView.sortDescriptors != wanted else { return }
+        tableView.sortDescriptors = wanted
     }
 
     /// Adds columns for field names the log has gained — pasted QSOs carrying a field

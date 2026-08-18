@@ -214,9 +214,12 @@ extension LogWindowController {
 
             // One undoable edit for the whole batch (§10.4): a lookup either fills what
             // the operator confirmed or does nothing, and one Undo puts it all back.
+            // Filling cells does not move a row, so an order a sort put the log in still
+            // holds afterwards.
             document.replaceAllRecords(
                 QRZLookup.records(in: document.log, applying: chosen),
-                actionName: "Fill from QRZ")
+                actionName: "Fill from QRZ",
+                sortedBy: document.sortedBy)
         }
     }
 
