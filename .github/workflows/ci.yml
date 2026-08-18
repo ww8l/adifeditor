@@ -20,6 +20,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Nothing here needs a token. Building and testing reads the checkout and writes nothing
+# back, so the job takes the least it can rather than inheriting the repository default —
+# which for a repo created through `gh` is commonly read/write. That matters most once
+# this repo is public: a `pull_request` trigger runs a stranger's code on the runner, and
+# "there are no secrets in this repo" (decision 19) is a fact about today, not a guard.
+permissions:
+  contents: read
+
 # A superseded run stops billing the moment it is replaced.
 concurrency:
   group: ci-${{ github.ref }}
