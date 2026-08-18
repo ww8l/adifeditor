@@ -175,6 +175,56 @@ final class LogDocument: NSDocument {
         NotificationCenter.default.post(name: Self.recordsDidChange, object: self)
     }
 
+    // MARK: - Pending edits
+
+    /// Ends any cell edit still in a field editor across this document's windows.
+    ///
+    /// See `GridViewController.commitPendingEdit` for why this is needed at all. It is
+    /// wired in three places rather than one because AppKit reaches saving by three
+    /// routes: the Save menu item, the close-and-save prompt, and the `NSEditor`
+    /// protocol the document machinery uses before both.
+    @discardableResult
+    func commitPendingEdits() -> Bool {
+        for controller in windowControllers {
+            if let log = controller as? LogWindowController, !log.commitPendingEdit() {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// ⌘S. `saveDocument:` is not an action the field editor handles, so the key
+    /// equivalent walks straight past it up the responder chain and the edit on screen
+    /// never reaches `log`. The file was written without it and then marked clean.
+    override func save(_ sender: Any?) {
+        commitPendingEdits()
+        super.save(sender)
+    }
+
+    override func saveAs(_ sender: Any?) {
+        commitPendingEdits()
+        super.saveAs(sender)
+    }
+
+    override func saveTo(_ sender: Any?) {
+        commitPendingEdits()
+        super.saveTo(sender)
+    }
+
+    /// Closing. AppKit asks this before deciding whether to put up the save-changes
+    /// prompt, so an uncommitted edit has to land in `log` first — otherwise a document
+    /// whose only change is the cell on screen is judged clean and closed without a word.
+    override func canClose(
+        withDelegate delegate: Any,
+        shouldClose shouldCloseSelector: Selector?,
+        contextInfo: UnsafeMutableRawPointer?
+    ) {
+        commitPendingEdits()
+        super.canClose(withDelegate: delegate,
+                       shouldClose: shouldCloseSelector,
+                       contextInfo: contextInfo)
+    }
+
     // MARK: - Windows
 
     override func makeWindowControllers() {

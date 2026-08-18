@@ -28,6 +28,10 @@ extension LogWindowController {
     /// only in how many references you happen to type is a choice the operator should not
     /// have to make — the number of parks already says which one they meant.
     @objc func stampForPOTA(_ sender: Any?) {
+        // Before anything reads the log. The output of this command is the file that
+        // gets uploaded, so a correction typed and not yet confirmed must be in it.
+        guard commitPendingEdit() else { return }
+
         promptForParks(
             message: "Stamp a park reference",
             information: "Writes a new file with this reference on every QSO that does not "

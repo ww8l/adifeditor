@@ -20,6 +20,9 @@ extension LogWindowController {
     // MARK: - Entry
 
     @objc func fillFromQRZ(_ sender: Any?) {
+        // Especially here: `proposedFills` reads a cell the user has just typed into as
+        // still empty, and would offer to fill over the top of it.
+        guard commitPendingEdit() else { return }
         guard let document = qrzDocument, let window else { return }
 
         guard let credentials = Preferences.credentials else {

@@ -19,6 +19,7 @@ extension LogWindowController {
     // MARK: - Field picker
 
     @objc func findDuplicates(_ sender: Any?) {
+        guard commitPendingEdit() else { return }
         guard let document = dedupeDocument, let window else { return }
 
         let columns = document.log.columnNames

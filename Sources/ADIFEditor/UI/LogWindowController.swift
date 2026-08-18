@@ -84,6 +84,13 @@ final class LogWindowController: NSWindowController {
     /// grid's final width is not settled until the view has laid out. Once the user has
     /// sized a window themselves, that frame is restored instead and further windows
     /// cascade off it rather than landing on top of each other.
+    /// Forwards to the grid. Every command on this controller calls it before reading
+    /// the document — see `GridViewController.commitPendingEdit`.
+    @discardableResult
+    func commitPendingEdit() -> Bool {
+        (contentViewController as? GridViewController)?.commitPendingEdit() ?? true
+    }
+
     override func showWindow(_ sender: Any?) {
         shouldCascadeWindows = hasSavedFrame
 

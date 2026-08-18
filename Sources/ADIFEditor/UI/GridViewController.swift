@@ -502,6 +502,37 @@ extension GridViewController: NSTableViewDelegate {
         super.keyDown(with: event)
     }
 
+    /// Ends an edit still sitting in the field editor, so the model matches what is on
+    /// screen before anything reads it.
+    ///
+    /// `sendsActionOnEndEditing` is the only route into the document, and it fires when
+    /// the field editor resigns — which a menu key equivalent and a toolbar click both
+    /// fail to make happen. A key equivalent whose action the field editor does not
+    /// handle (`saveDocument:`, `stampForPOTA:`) walks past it up the responder chain
+    /// without disturbing it, and an `NSToolbarItem`'s button refuses first responder
+    /// outright. So a value typed into a cell and never confirmed was invisible to Save,
+    /// which wrote the file without it and then marked the document clean, and to the
+    /// POTA writer, whose whole purpose is producing the file that gets uploaded.
+    ///
+    /// Returns false only if the responder refuses to resign, which is the caller's cue
+    /// to abandon whatever it was about to do.
+    ///
+    /// Cut, copy and paste need no such call: those actions *are* handled by the field
+    /// editor, so while a cell is being edited they apply to the text, as they should.
+    @discardableResult
+    func commitPendingEdit() -> Bool {
+        guard let window = view.window,
+              (window.firstResponder as? NSTextView)?.isFieldEditor == true
+        else { return true }
+
+        guard window.makeFirstResponder(nil) else { return false }
+
+        // Leave focus where pressing Return leaves it, rather than on the window, so the
+        // selection stays active and arrow keys keep working.
+        window.makeFirstResponder(tableView)
+        return true
+    }
+
     /// Commits an edit. Fires when the user presses Return or clicks away, which is
     /// AppKit's own definition of the edit being finished.
     ///
