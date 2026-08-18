@@ -83,15 +83,21 @@ public enum POTAStamp {
         parks.map { park in
             var source = document
 
-            // Replacing means clearing first: with the field emptied, the same
-            // fill-only-what-is-empty path handles both cases, so there is one rule about
-            // how a reference gets written rather than two that can drift apart.
+            // Replacing writes *through* the existing field rather than clearing it and
+            // letting `stamp` add it back. The shorter version — clear, then fill —
+            // reused one code path, but clearing removed the last copy of the field from
+            // the document, so what came back took the normalized spelling and landed at
+            // the end of the record: a file that said `<my_sig_info:7>US-1111` in the
+            // middle of each QSO got `<MY_SIG_INFO:7>US-2222` appended last (decision 3).
+            // Only the derived files are affected and POTA reads the name
+            // case-insensitively, but an output that does not look like its input is not
+            // what this app hands anyone.
             if replace {
                 for index in source.records.indices where !source.records[index].isEmpty(referenceField) {
-                    if let cleared = source.recordBySettingValue("",
-                                                                 forColumn: referenceField,
-                                                                 inRecordAt: index) {
-                        source.records[index] = cleared
+                    if let replaced = source.recordBySettingValue(park.text,
+                                                                  forColumn: referenceField,
+                                                                  inRecordAt: index) {
+                        source.records[index] = replaced
                     }
                 }
             }

@@ -207,6 +207,27 @@ struct SplitTests {
         #expect(replaced[0].document.records[1]["MY_SIG_INFO"] == "US-1234")
     }
 
+    @Test("a replaced reference keeps the file's spelling and its place in the record")
+    func replaceKeepsSpellingAndPosition() throws {
+        // Decision 3. Replacing used to clear the field and let the stamp add it back,
+        // and clearing removed the document's last copy of it — so the re-added field
+        // took the normalized uppercase name and went to the end of the record. A log
+        // that reads `<my_sig_info:7>US-1111` in the middle of every QSO would be handed
+        // to POTA with `<MY_SIG_INFO:7>US-2222` tacked on the end instead.
+        let document = try parse("<call:5>W1ABC <my_sig_info:7>US-1111 <mode:3>FT8 <eor>\n")
+
+        let replaced = POTAStamp.split(document,
+                                       into: [ParkReference("US-2222")],
+                                       replacingExistingReferences: true)
+        let record = replaced[0].document.records[0]
+
+        #expect(record["MY_SIG_INFO"] == "US-2222")
+        #expect(record.fields.map(\.spelling) == ["call", "my_sig_info", "mode"])
+
+        let written = String(decoding: ADIFWriter.write(replaced[0].document), as: UTF8.self)
+        #expect(written == "<call:5>W1ABC <my_sig_info:7>US-2222 <mode:3>FT8 <eor>\n")
+    }
+
     @Test("splitting does not modify the source document")
     func splitLeavesSourceAlone() throws {
         let document = try parse("<CALL:5>W1ABC <EOR>\n")
