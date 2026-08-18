@@ -5,14 +5,15 @@
 #
 # Keep the step list below in sync with ci.yml.
 #
-# Two of ci.yml's steps are deliberately absent:
+# The bundle is built too, but into a temporary directory rather than over
+# .build/ADIF Editor.app, which is routinely open and in use on this machine — a pre-push
+# hook is no place to yank an app out from under someone. That objection was why the step
+# was skipped entirely, which left Info.plist, the entitlements and the signature with no
+# local coverage at all: `swift build` is happy with any of them broken, and the only
+# automated check was a workflow that has never run.
 #
-#   * The bundle. `Scripts/bundle.sh` starts by `rm -rf`-ing .build/ADIF Editor.app, and
-#     that bundle is routinely open and in use on this machine. A pre-push hook is no
-#     place to yank an app out from under someone. CI bundles on a runner where nothing
-#     is running.
-#   * The release build, which needs the full Xcode the hosted runner has and this
-#     machine does not (decision 9).
+# One of ci.yml's steps is still deliberately absent: the release build, which needs the
+# full Xcode the hosted runner has and this machine does not (decision 9).
 #
 # So passing here is not a promise that CI passes — it only means the obvious breakage is
 # already caught. That asymmetry is the point: this is the cheap gate, CI is the real one.
@@ -32,5 +33,11 @@ swift build
 
 step "Scripts/test.sh"
 Scripts/test.sh
+
+step "Scripts/bundle.sh + verify-bundle.sh"
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH"' EXIT INT TERM
+BUNDLE_DEST="$SCRATCH/ADIF Editor.app" Scripts/bundle.sh
+Scripts/verify-bundle.sh "$SCRATCH/ADIF Editor.app"
 
 printf '\n\033[1;32m==> Local CI passed\033[0m (%ss)\n' "$(( $(date +%s) - start ))"

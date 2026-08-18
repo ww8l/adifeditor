@@ -63,5 +63,7 @@ jobs:
       - name: Bundle
         run: Scripts/bundle.sh
 
+      # Same script the pre-push hook runs, so the two gates check the same things and
+      # cannot drift into disagreeing about what a good bundle is.
       - name: Verify the bundle
-        run: codesign --verify --strict ".build/ADIF Editor.app"
+        run: Scripts/verify-bundle.sh ".build/ADIF Editor.app"

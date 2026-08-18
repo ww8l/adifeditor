@@ -74,6 +74,9 @@ jobs:
       # §5 asks for universal. The lipo path that produces it is easy to break in a way
       # that still yields a working app on whichever architecture the runner happens to
       # be — which is exactly how the release path went unnoticed-broken once before.
+      - name: Verify the bundle
+        run: Scripts/verify-bundle.sh ".build/ADIF Editor.app"
+
       - name: Verify both architectures and the signature
         run: |
           binary=".build/ADIF Editor.app/Contents/MacOS/ADIFEditor"
