@@ -276,3 +276,95 @@ struct FilenameTests {
         #expect(POTAFilename.earliestDate(in: try parse("<CALL:5>W1ABC <EOR>\n")) == "")
     }
 }
+
+@Suite("POTA output targets")
+struct POTATargetsTests {
+
+    private let folder = URL(fileURLWithPath: "/Users/op/Logs", isDirectory: true)
+
+    private func targets(_ names: [String], source: URL? = nil) throws -> [URL] {
+        try POTATargets.resolve(names: names, in: folder, source: source).get()
+    }
+
+    private func problem(_ names: [String], source: URL? = nil) -> POTATargets.Problem? {
+        guard case .failure(let problem) = POTATargets.resolve(names: names,
+                                                              in: folder,
+                                                              source: source) else { return nil }
+        return problem
+    }
+
+    @Test("names resolve against the chosen folder, in order")
+    func resolvesInOrder() throws {
+        let urls = try targets(["WW8L@US-1234 20260101.adi", "WW8L@US-5678 20260101.adi"])
+        #expect(urls.map(\.path) == ["/Users/op/Logs/WW8L@US-1234 20260101.adi",
+                                     "/Users/op/Logs/WW8L@US-5678 20260101.adi"])
+    }
+
+    @Test("the open document is refused, whatever the folder is spelled like")
+    func refusesTheSourceFile() {
+        // §6.1. The app's own convention collides with itself: a log the app wrote,
+        // re-opened, corrected, and stamped back into the folder it came from proposes
+        // exactly its own name.
+        let source = URL(fileURLWithPath: "/Users/op/Logs/WW8L@US-1234 20260101.adi")
+        #expect(problem(["WW8L@US-1234 20260101.adi"], source: source)
+                == .sourceFile("WW8L@US-1234 20260101.adi"))
+
+        // Same file, reached differently. A path comparison alone would miss both.
+        let viaParent = URL(fileURLWithPath: "/Users/op/Radio/../Logs/WW8L@US-1234 20260101.adi")
+        #expect(problem(["WW8L@US-1234 20260101.adi"], source: viaParent) == .sourceFile("WW8L@US-1234 20260101.adi"))
+        #expect(problem(["ww8l@us-1234 20260101.adi"], source: source) != nil,
+                "the boot volume is case-insensitive, so this opens the same file")
+    }
+
+    @Test("a different file in the source's folder is fine")
+    func allowsSiblingsOfTheSource() throws {
+        let source = URL(fileURLWithPath: "/Users/op/Logs/FT8CN123.txt")
+        let urls = try targets(["WW8L@US-1234 20260101.adi"], source: source)
+        #expect(urls.count == 1)
+    }
+
+    @Test("a never-saved document has nothing to overwrite")
+    func allowsEverythingWhenUnsaved() throws {
+        #expect(try targets(["WW8L@US-1234 20260101.adi"], source: nil).count == 1)
+    }
+
+    @Test("two names for one file are refused rather than written over each other")
+    func refusesDuplicates() {
+        // Both writes would go through, the second would win, and the Finder would open
+        // on one file where the sheet promised two — so one park's log is never uploaded.
+        #expect(problem(["WW8L@US-1234 20260101.adi", "WW8L@US-1234 20260101.adi"])
+                == .duplicateName("WW8L@US-1234 20260101.adi"))
+    }
+
+    @Test("two parks whose sanitized names collide are caught")
+    func refusesCollisionAfterSanitizing() {
+        // ParkReference.list de-duplicates on the raw text, so US/1234 and US-1234 both
+        // survive as distinct parks — and then sanitizing maps them onto one filename.
+        let names = [POTAFilename.name(callsign: "WW8L",
+                                       park: ParkReference("US/1234"),
+                                       date: "20260101"),
+                     POTAFilename.name(callsign: "WW8L",
+                                       park: ParkReference("US-1234"),
+                                       date: "20260101")]
+        #expect(problem(names) == .duplicateName("WW8L@US-1234 20260101.adi"))
+    }
+
+    @Test("an emptied name is refused, naming the row it came from")
+    func refusesEmptyNames() {
+        // appendingPathComponent("") is the folder itself.
+        #expect(problem(["WW8L@US-1234 20260101.adi", "   "]) == .emptyName(line: 2))
+        #expect(problem([""]) == .emptyName(line: 1))
+    }
+
+    @Test("a typed path separator stays inside the chosen folder")
+    func sanitizesTypedNames() throws {
+        let urls = try targets(["WW8L/P@US-1234.adi"])
+        #expect(urls[0].path == "/Users/op/Logs/WW8L-P@US-1234.adi")
+        #expect(urls[0].deletingLastPathComponent().path == folder.path)
+    }
+
+    @Test("surrounding whitespace is trimmed rather than written into the name")
+    func trimsTypedNames() throws {
+        #expect(try targets(["  WW8L@US-1234.adi "])[0].lastPathComponent == "WW8L@US-1234.adi")
+    }
+}

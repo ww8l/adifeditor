@@ -113,18 +113,24 @@ extension LogWindowController {
     }
 
     /// The app proposes the filenames and the operator confirms or edits them (§10.2).
+    ///
+    /// `typed` re-presents the sheet with names the operator already edited, which is what
+    /// a refused name comes back to: making them retype four filenames and re-choose the
+    /// folder because one of them was wrong would be its own bug.
     private func confirmFilenames(for parks: [ParkReference],
                                   in folder: URL,
-                                  replacingExisting: Bool) {
+                                  replacingExisting: Bool,
+                                  typed: [String]? = nil) {
         guard let document = logDocument, let window else { return }
 
         let callsign = POTAFilename.callsign(in: document.log) ?? ""
         let date = POTAFilename.earliestDate(in: document.log)
 
-        let fields = parks.map { park -> NSTextField in
-            let field = NSTextField(string: POTAFilename.name(callsign: callsign,
-                                                              park: park,
-                                                              date: date))
+        let fields = parks.enumerated().map { index, park -> NSTextField in
+            let proposed = typed?[index] ?? POTAFilename.name(callsign: callsign,
+                                                             park: park,
+                                                             date: date)
+            let field = NSTextField(string: proposed)
             field.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
             return field
         }
@@ -182,9 +188,21 @@ extension LogWindowController {
                                       replacingExistingReferences: replacingExisting,
                                       alsoWriteProgramField: writesProgramField)
 
+        // What the operator typed is arbitrary text by now, and POTAKit owns the rule for
+        // which of it may be written — §6.1's enforcement point among it, so that it is
+        // somewhere a test can reach rather than inside this completion handler.
+        let targets: [URL]
+        switch POTATargets.resolve(names: names, in: folder, source: document.fileURL) {
+        case .success(let resolved):
+            targets = resolved
+        case .failure(let problem):
+            report(problem, parks: parks, names: names,
+                   folder: folder, replacingExisting: replacingExisting)
+            return
+        }
+
         // Never quietly over an existing file. These are activation logs, and a name
         // collision most likely means a previous run of this same split.
-        let targets = zip(outputs, names).map { folder.appendingPathComponent($1) }
         let clashes = targets.filter { FileManager.default.fileExists(atPath: $0.path) }
 
         if !clashes.isEmpty {
@@ -203,6 +221,44 @@ extension LogWindowController {
         }
 
         write(outputs: outputs, to: targets)
+    }
+
+    /// A refused name, said plainly, and then back to the sheet it was typed in.
+    private func report(_ problem: POTATargets.Problem,
+                        parks: [ParkReference],
+                        names: [String],
+                        folder: URL,
+                        replacingExisting: Bool) {
+        guard let window else { return }
+
+        let alert = NSAlert()
+        switch problem {
+        case .sourceFile(let name):
+            // The one the operator is least likely to spot on their own: the proposed
+            // name is the app's own convention, so a log this app wrote and they re-opened
+            // collides with itself and reads as a stale file from the last run.
+            alert.messageText = "\(name) is the log you have open."
+            alert.informativeText = "Writing it would replace the log the QSOs came from. "
+                                  + "Give the output a different name, or choose another "
+                                  + "folder."
+        case .duplicateName(let name):
+            alert.messageText = "Two of these files are both called \(name)."
+            alert.informativeText = "One would be written over the other and only one park "
+                                  + "would end up on disk. Give each park its own name."
+        case .emptyName(let line):
+            alert.messageText = "Filename \(line) is empty."
+            alert.informativeText = "Every park needs a name to be written under."
+        }
+        alert.addButton(withTitle: "OK")
+
+        alert.beginSheetModal(for: window) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.confirmFilenames(for: parks,
+                                       in: folder,
+                                       replacingExisting: replacingExisting,
+                                       typed: names)
+            }
+        }
     }
 
     private func write(outputs: [(park: ParkReference, document: ADIFDocument)],

@@ -53,7 +53,11 @@ public enum POTAFilename {
     /// A portable callsign like `WW8L/P` is the common case, and a `/` is a path
     /// separator. Substituting rather than stripping keeps the callsign readable, and the
     /// operator can edit the proposed name before anything is written (§10.2).
-    private static func sanitized(_ text: String) -> String {
+    ///
+    /// Applied again by `POTATargets` to whatever the operator typed there, since a `/`
+    /// reaching `appendingPathComponent` writes into a subpath rather than the folder
+    /// they chose.
+    static func sanitized(_ text: String) -> String {
         String(text.map { character in
             "/:\\".contains(character) ? "-" : character
         })
