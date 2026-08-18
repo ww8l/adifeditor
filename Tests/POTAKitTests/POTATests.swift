@@ -389,3 +389,79 @@ struct POTATargetsTests {
         #expect(try targets(["  WW8L@US-1234.adi "])[0].lastPathComponent == "WW8L@US-1234.adi")
     }
 }
+
+@Suite("POTA output writing")
+struct POTAOutputsTests {
+
+    /// A folder of this test's own, removed afterwards however the test ends.
+    private func inTemporaryFolder(_ body: (URL) throws -> Void) throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("potaoutputs-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try body(folder)
+    }
+
+    private func log(_ call: String) -> ADIFDocument {
+        let text = "<CALL:\(call.count)>\(call)<BAND:3>20m<EOR>\n"
+        return try! ADIFParser.parse(Data(text.utf8))
+    }
+
+    @Test("every file written is reported, and holds what it was given")
+    func allWritten() throws {
+        try inTemporaryFolder { folder in
+            let documents = [log("W1ABC"), log("W2DEF"), log("W3GHI")]
+            let targets = ["a.adi", "b.adi", "c.adi"].map(folder.appendingPathComponent)
+
+            let outcome = POTAOutputs.write(documents, to: targets)
+
+            #expect(outcome.succeeded)
+            #expect(outcome.written == targets)
+            #expect(outcome.notAttempted.isEmpty)
+
+            let back = try ADIFParser.parse(Data(contentsOf: targets[1]))
+            #expect(back.records[0]["CALL"] == "W2DEF")
+        }
+    }
+
+    /// The failure the issue was filed for: a set that stops partway. A directory
+    /// standing where the third file should go is a write that fails for a reason of
+    /// the destination, which is the shape of the real cases (a full volume, a folder
+    /// that turns out not to be writable).
+    @Test("a failure partway names what was written and what was not")
+    func partialWrite() throws {
+        try inTemporaryFolder { folder in
+            let documents = [log("W1ABC"), log("W2DEF"), log("W3GHI"), log("W4JKL")]
+            let targets = ["a.adi", "b.adi", "c.adi", "d.adi"].map(folder.appendingPathComponent)
+            try FileManager.default.createDirectory(at: targets[2],
+                                                    withIntermediateDirectories: false)
+
+            let outcome = POTAOutputs.write(documents, to: targets)
+
+            #expect(!outcome.succeeded)
+            #expect(outcome.written == [targets[0], targets[1]])
+            #expect(outcome.failure?.target == targets[2])
+            #expect(outcome.notAttempted == [targets[3]])
+
+            // The two that were written are real files, not half of one: this is what
+            // the operator is being told is on disk.
+            #expect(try ADIFParser.parse(Data(contentsOf: targets[0])).records.count == 1)
+            #expect(!FileManager.default.fileExists(atPath: targets[3].path))
+        }
+    }
+
+    @Test("a first-file failure reports nothing written")
+    func nothingWritten() throws {
+        try inTemporaryFolder { folder in
+            let targets = ["a.adi", "b.adi"].map(folder.appendingPathComponent)
+            try FileManager.default.createDirectory(at: targets[0],
+                                                    withIntermediateDirectories: false)
+
+            let outcome = POTAOutputs.write([log("W1ABC"), log("W2DEF")], to: targets)
+
+            #expect(outcome.written.isEmpty)
+            #expect(outcome.failure?.target == targets[0])
+            #expect(outcome.notAttempted == [targets[1]])
+        }
+    }
+}

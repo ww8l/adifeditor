@@ -265,19 +265,51 @@ extension LogWindowController {
                        to targets: [URL]) {
         guard let window else { return }
 
-        do {
-            for (output, target) in zip(outputs, targets) {
-                try ADIFWriter.write(output.document).write(to: target, options: .atomic)
-            }
-        } catch {
-            let alert = NSAlert(error: error)
-            alert.beginSheetModal(for: window)
+        let outcome = POTAOutputs.write(outputs.map(\.document), to: targets)
+
+        guard let failure = outcome.failure else {
+            // Reveal rather than announce: the operator's next step is to upload these,
+            // and the Finder is where they do it from.
+            NSWorkspace.shared.activateFileViewerSelecting(outcome.written)
             return
         }
 
-        // Reveal rather than announce: the operator's next step is to upload these, and
-        // the Finder is where they do it from.
-        NSWorkspace.shared.activateFileViewerSelecting(targets)
+        let alert = NSAlert()
+        alert.messageText = "\(failure.target.lastPathComponent) could not be written."
+        alert.informativeText = failure.error.localizedDescription
+                              + "\n\n"
+                              + accountOfDisk(outcome, of: targets.count)
+        alert.addButton(withTitle: "OK")
+
+        alert.beginSheetModal(for: window) { _ in
+            // The half-written set is the part the operator cannot see from here, and
+            // the whole point of saying it exists is that they can go deal with it.
+            guard !outcome.written.isEmpty else { return }
+            NSWorkspace.shared.activateFileViewerSelecting(outcome.written)
+        }
+    }
+
+    /// What is on disk after a failed write, named file by file.
+    ///
+    /// The count alone would not do it: the operator's next move is to run the split
+    /// again, and without knowing which names already exist they meet the "already
+    /// exists" prompt for files they do not know they made and cannot tell from a stale
+    /// set left by an earlier run.
+    private func accountOfDisk(_ outcome: POTAOutputs.Outcome, of total: Int) -> String {
+        guard !outcome.written.isEmpty else {
+            return total == 1
+                ? "Nothing was written."
+                : "None of the \(total) files were written."
+        }
+
+        let names = outcome.written.map(\.lastPathComponent).joined(separator: ", ")
+        guard outcome.written.count > 1 else {
+            return "1 of the \(total) files was written and is still there: \(names). Delete "
+                 + "it before trying again, or the next attempt will ask whether to replace it."
+        }
+        return "\(outcome.written.count) of the \(total) files were written and are still "
+             + "there: \(names). Delete them before trying again, or the next attempt will "
+             + "ask whether to replace them."
     }
 
     // MARK: - Prompt
