@@ -72,6 +72,25 @@ echo "Assembling bundle…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
+# From here until the signature verifies, what is on disk is not an app: a directory
+# named ADIF Editor.app holding no Info.plist, no binary and no signature. Leaving that
+# behind is worse than leaving nothing, because it is at the path the dev loop launches
+# from and `codesign --verify` answers "bundle format unrecognized, invalid, or
+# unsuitable" — a confusing thing to be told when the real problem was a missing PNG.
+#
+# A trap rather than a check after the icon step: every failure in between leaves the
+# same stub, and the ones nobody has thought of are exactly the ones worth covering.
+BUNDLE_IS_PARTIAL=1
+discard_partial_bundle() {
+    status=$?
+    if [ "$BUNDLE_IS_PARTIAL" -eq 1 ]; then
+        rm -rf "$APP"
+        [ "$status" -eq 0 ] || echo "Removed the half-built $APP" >&2
+    fi
+    exit "$status"
+}
+trap discard_partial_bundle EXIT HUP INT TERM
+
 # The .icns is generated here rather than committed, so Support/Icon/AppIcon-1024.png is
 # the single source of truth and a derived binary can never drift from it. Both tools
 # ship with macOS — `sips` and `iconutil` are in /usr/bin, not inside Xcode.app — so this
@@ -153,6 +172,9 @@ codesign --force --sign - \
     "$APP" >/dev/null
 
 codesign --verify --strict "$APP"
+
+# A real bundle from here on, so the trap stops guarding it.
+BUNDLE_IS_PARTIAL=0
 
 echo "Built $APP"
 
