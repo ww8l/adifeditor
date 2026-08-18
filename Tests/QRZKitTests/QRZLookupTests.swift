@@ -116,8 +116,13 @@ struct QRZLookupTests {
         #expect(fills.contains { $0.field == "NAME" && $0.value == "John Q Public" })
     }
 
-    @Test("a field holding only spaces counts as empty")
-    func whitespaceIsEmpty() throws {
+    @Test("a field holding only spaces is a value, and is left alone")
+    func whitespaceIsNotEmpty() throws {
+        // §6.3. Three characters the file carried are three characters the operator can
+        // see and delete themselves; an automated tool does not decide they meant nothing.
+        // QRZ used to trim before testing, which made it the one tool in the app that
+        // wrote over a value — and `.whitespaces` excludes newlines, so it spared a cell
+        // holding a newline while overwriting one holding a space.
         let document = try parse("""
             <CALL:5>W1ABC <NAME:3>    <EOR>
 
@@ -126,7 +131,22 @@ struct QRZLookupTests {
                                             rows: IndexSet([0]),
                                             results: ["W1ABC": w1abc])
 
-        #expect(fills.contains { $0.field == "NAME" })
+        #expect(!fills.contains { $0.field == "NAME" })
+        #expect(fills.contains { $0.field == "QTH" }, "the rest of the record still fills")
+    }
+
+    @Test("a field holding a newline is left alone too")
+    func newlineIsNotEmpty() throws {
+        let document = try parse("""
+            <CALL:5>W1ABC <NAME:1>
+            <EOR>
+
+            """)
+        let fills = QRZLookup.proposedFills(in: document,
+                                            rows: IndexSet([0]),
+                                            results: ["W1ABC": w1abc])
+
+        #expect(!fills.contains { $0.field == "NAME" })
     }
 
     @Test("a callsign QRZ did not return contributes nothing")

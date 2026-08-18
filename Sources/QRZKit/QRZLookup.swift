@@ -74,10 +74,12 @@ public enum QRZLookup {
             for (field, value) in QRZFieldMapping.values(from: found) {
                 if let fields, !fields.contains(field) { continue }
 
-                // Absent and present-but-empty both count as empty, matching how the
-                // rest of the app treats a blank cell.
-                let existing = (record[field] ?? "").trimmingCharacters(in: .whitespaces)
-                guard existing.isEmpty else { continue }
+                // ADIFRecord's definition, not a second one: a cell holding a space is
+                // a value the file carried, and §6.3 says an automated tool leaves a
+                // value alone. Trimming here made QRZ the one tool in the app that would
+                // write over one — and inconsistently, since `.whitespaces` excludes
+                // newlines, so a cell holding "\n" was spared and one holding " " was not.
+                guard record.isEmpty(field) else { continue }
 
                 fills.append(ProposedFill(row: row, field: field, value: value))
             }
