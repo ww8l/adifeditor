@@ -45,13 +45,27 @@ struct RoundTripTests {
         // Compared on fields rather than whole records: `isTruncated` marks a defect
         // in the *input*, and the writer repairs it by supplying a terminator, so the
         // flag is legitimately clear the second time through.
-        #expect(first.records.map(\.fields) == second.records.map(\.fields),
+        //
+        // `lengthSpelling` is the same category and is set aside for the same reason. It
+        // is how the *input* wrote LENGTH, and a wrong one is exactly what §6.2a's single
+        // exception licenses the writer to correct — `<CALL:3>W1ABC` comes back as
+        // `<CALL:5>`, so the spellings differ by design while the fields do not. The
+        // byte-identity test next door is what holds the well-formed files to their
+        // original spelling.
+        #expect(first.records.map { $0.fields.map(withoutLengthSpelling) }
+                    == second.records.map { $0.fields.map(withoutLengthSpelling) },
                 "\(url.lastPathComponent): record fields differ")
         #expect(first.records.map(\.terminatorSpelling) == second.records.map(\.terminatorSpelling),
                 "\(url.lastPathComponent): record terminators differ")
         #expect(first.header == second.header, "\(url.lastPathComponent): headers differ")
         #expect(first.byteOrderMark == second.byteOrderMark,
                 "\(url.lastPathComponent): BOM differs")
+    }
+
+    private func withoutLengthSpelling(_ field: ADIFField) -> ADIFField {
+        var copy = field
+        copy.lengthSpelling = nil
+        return copy
     }
 
     /// Writing is idempotent: once through the writer, the bytes stop moving. This is

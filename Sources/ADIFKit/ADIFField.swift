@@ -14,8 +14,29 @@ public struct ADIFField: Equatable, Sendable {
     /// a field that was present in the input (decision 2).
     public var value: String
 
-    /// The optional data-type indicator: the `D` in `<QSO_DATE:8:D>`.
-    public var typeIndicator: Character?
+    /// LENGTH exactly as the file spelled it — `5`, but also `005` and `+5`, which are
+    /// the same number and not the same bytes. `nil` for a field this app created, which
+    /// has no spelling to preserve.
+    ///
+    /// Honoured by the writer only while it still describes the value. Edit the cell and
+    /// a fresh count is computed: re-emitting a length known to be wrong is the one thing
+    /// §6.2a's exception exists to forbid.
+    public var lengthSpelling: String?
+
+    /// Everything after the second colon, exactly as the file wrote it: the `D` in
+    /// `<QSO_DATE:8:D>`, but also the `DATE` in `<QSO_DATE:8:DATE>` and the `S:X` in
+    /// `<CALL:5:S:X>`.
+    ///
+    /// Held as text rather than a single `Character` for the same reason `spelling` is
+    /// held rather than a normalized name (decision 3) — re-rendering from a `Character`
+    /// dropped the rest and rewrote a file nobody had edited. `nil` means there was no
+    /// second colon at all; `""` means there was one with nothing after it, and those
+    /// are different bytes.
+    public var typeSpelling: String?
+
+    /// The first character of the type indicator, which is what the ADIF spec's own
+    /// one-letter codes amount to. Read-only: `typeSpelling` is what gets written.
+    public var typeIndicator: Character? { typeSpelling?.first }
 
     /// Literal text between this field's value and the next `<`. Usually "" or " ".
     ///
@@ -28,12 +49,14 @@ public struct ADIFField: Equatable, Sendable {
     public init(
         spelling: String,
         value: String,
-        typeIndicator: Character? = nil,
+        lengthSpelling: String? = nil,
+        typeSpelling: String? = nil,
         trailingText: String = ""
     ) {
         self.spelling = spelling
         self.value = value
-        self.typeIndicator = typeIndicator
+        self.lengthSpelling = lengthSpelling
+        self.typeSpelling = typeSpelling
         self.trailingText = trailingText
     }
 

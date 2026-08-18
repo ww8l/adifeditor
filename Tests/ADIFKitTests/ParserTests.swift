@@ -308,6 +308,41 @@ struct ParserTests {
                 "40k took \(large)s against 10k's \(small)s — the quadratic scan is back")
     }
 
+    @Test("a tag's own spelling of LENGTH and TYPE survives the round trip")
+    func oddTagSpellingsSurvive() throws {
+        // §6.2a lets an unedited file's bytes move only at the site of a recovered parse
+        // error, and requires a warning there. All five of these parsed silently and came
+        // back different: `005`→`5`, `+5`→`5`, `DATE`→`D`, `S:X`→`S`, `5:`→`5`. Nothing
+        // was wrong with the file, so there was nothing to warn about and no banner — the
+        // user edited nothing, pressed Save, and got a different file.
+        let name = "odd-tag-spellings.adi"
+        let url = try #require(Fixtures.all.first { $0.lastPathComponent == name })
+        let data = try Fixtures.data(url)
+
+        let document = try ADIFParser.parse(data)
+        #expect(document.warnings.isEmpty)
+        #expect(ADIFWriter.write(document) == data)
+
+        let fields = document.records[0].fields
+        #expect(fields.map(\.lengthSpelling) == ["005", "8", "3", "3", "+3"])
+        #expect(fields.map(\.typeSpelling) == [nil, "DATE", "S:X", "", nil])
+        #expect(fields.map(\.typeIndicator) == [nil, "D", "S", nil, nil])
+    }
+
+    @Test("an edited cell gets a freshly counted length, not the file's old spelling")
+    func editedCellRecountsLength() throws {
+        // The other half of the rule: `lengthSpelling` is preserved only while it still
+        // describes the value. Re-emitting `005` over a six-character value would be
+        // writing a length known to be wrong.
+        var document = try parse("<EOH>\n<CALL:005>W1ABC<EOR>\n")
+        let edited = try #require(document.recordBySettingValue("W1ABCD",
+                                                                forColumn: "CALL",
+                                                                inRecordAt: 0))
+        document.records[0] = edited
+        #expect(String(decoding: ADIFWriter.write(document), as: UTF8.self)
+                    == "<EOH>\n<CALL:6>W1ABCD<EOR>\n")
+    }
+
     @Test("warnings carry a byte offset")
     func warningsCarryOffsets() throws {
         let document = try parseFixture("bad-length-short.adi")

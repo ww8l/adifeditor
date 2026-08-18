@@ -108,7 +108,8 @@ struct ADIFScanner {
         /// tag carried none.
         var lengthSpelling: String
 
-        var typeIndicator: Character?
+        /// Everything after the second colon, verbatim. `nil` when there was none.
+        var typeSpelling: String?
 
         /// Index just past the closing `>`.
         var end: Int
@@ -164,21 +165,26 @@ struct ADIFScanner {
 
         if parts.count == 1 {
             return Tag(spelling: spelling, declaredLength: nil, hasLength: false,
-                       lengthSpelling: "", typeIndicator: nil, end: close + 1)
+                       lengthSpelling: "", typeSpelling: nil, end: close + 1)
         }
 
         let lengthSpelling = String(parts[1])
-        let type = parts.count > 2 ? parts[2].first : nil
+        // Everything past the second colon, rejoined. `<CALL:5:S:X>` keeps its `S:X`
+        // and `<CALL:5:>` keeps an empty-but-present indicator; taking only the first
+        // character of `parts[2]` discarded both and rewrote the file (§6.2a).
+        let type = parts.count > 2
+            ? parts[2...].map(String.init).joined(separator: ":")
+            : nil
         if let length = Int(lengthSpelling), length >= 0 {
             return Tag(spelling: spelling, declaredLength: length, hasLength: true,
-                       lengthSpelling: lengthSpelling, typeIndicator: type,
+                       lengthSpelling: lengthSpelling, typeSpelling: type,
                        end: close + 1)
         }
         // The LENGTH is unusable. Keep the field only if its name is one, so that
         // recovery cannot manufacture columns out of markup.
         guard ADIFScanner.isPlausibleFieldName(spelling) else { return nil }
         return Tag(spelling: spelling, declaredLength: nil, hasLength: true,
-                   lengthSpelling: lengthSpelling, typeIndicator: type, end: close + 1)
+                   lengthSpelling: lengthSpelling, typeSpelling: type, end: close + 1)
     }
 
     /// True when a well-formed tag begins at `start`. Used to decide whether a run of
@@ -379,7 +385,8 @@ struct ADIFScanner {
             result.fields.append(
                 ADIFField(spelling: tag.spelling,
                           value: value,
-                          typeIndicator: tag.typeIndicator,
+                          lengthSpelling: tag.lengthSpelling,
+                          typeSpelling: tag.typeSpelling,
                           trailingText: trailing)
             )
         }

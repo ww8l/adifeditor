@@ -40,6 +40,7 @@ write, and only at the site of the defect.
 | `newline-in-value.adi` | A value containing literal newlines (decision 8) |
 | `angle-bracket-in-value.adi` | A value containing `<`, which must not confuse the scanner |
 | `no-trailing-newline.adi` | File ends immediately after `<EOR>` |
+| `odd-tag-spellings.adi` | `<CALL:005>`, `<CALL:+3>`, `<QSO_DATE:8:DATE>`, `<MODE:3:S:X>`, `<BAND:3:>` — LENGTH and TYPE spelled in ways that normalize away. All five used to be rewritten silently (§6.2a) |
 | `varying-field-order.adi` | Records whose field order disagrees with each other |
 | `sparse-fields.adi` | Fields present on some records only (§9 column union) |
 
