@@ -36,13 +36,13 @@ already set here; a fresh clone needs `git config core.hooksPath .githooks`.
 
 ## Where things stand
 
-*Last updated 2026-08-16.*
+*Last updated 2026-08-18.*
 
 **M1 is complete, the owner has used it, and it has now shipped.** The QRZ lookup (§10.4)
 landed after M1, on the owner's request, and is the reason this app can reach the network
 at all. **The live QRZ lookup has run against the real service, on the owner's
 subscription, and worked** (2026-08-15) — the fake-transport-only caveat that stood here
-is retired. Find (⌘F) followed. 183 tests, all green and all mutation-checked rather than
+is retired. Find (⌘F) followed. 237 tests, all green and all mutation-checked rather than
 merely observed passing.
 
 **`v26.8.16` is built, verified and sitting as a draft release** (2026-08-16). Universal,
@@ -237,9 +237,16 @@ it does for a real app icon rather than a generic fallback.
   is a draft, and a draft is not published. Revisit that sentence when one is, not before.
 
 **Where to pick up (2026-08-18).** A five-agent code review ran on 2026-08-17 and filed
-issues #1–#39; twenty-two are closed and seven sev:low remain. Working tree clean, `main`
-tracking `origin/main`. Three Actions runs total, all green first time, ~42 quota-minutes
-of 2,000 spent. Session-by-session detail lives in `CLAUDE.local.md` rather than here.
+issues #1–#40. **All forty are closed**, two of them without a code change: #7 was not a
+bug, and #27's suggested fix measured slower than the code it replaced, so it got a
+different one. The backlog is empty. Working tree clean, `main` tracking `origin/main`.
+Session-by-session detail lives in `CLAUDE.local.md` rather than here.
+
+The app layer has no test suite (§11 exempts it), so the fixes that landed there were
+proved with headless harnesses over the real controllers — `swiftc` across every app
+source but `main.swift`, linked against `-emit-library` builds of the three kits. They
+live in the scratchpad rather than the repo, which is a gap worth closing if that layer
+keeps changing.
 
 If a built bundle is left running, quit it before rebuilding — and ask rather than using
 `osascript ... to quit`, which once parked the app on a save-changes sheet and blocked
