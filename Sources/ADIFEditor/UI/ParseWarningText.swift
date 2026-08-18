@@ -50,6 +50,11 @@ enum ParseWarningText {
 
         case .truncatedTag(let partial):
             return "The file ends inside the tag \(quoted(partial))."
+
+        case .duplicateFieldInRecord(let field):
+            return "One QSO carries \(field) twice. Both copies are kept and both will "
+                 + "be written back, but the grid shows and edits only the first — so "
+                 + "clearing that cell reveals the second rather than emptying it."
         }
     }
 

@@ -56,6 +56,8 @@ write, and only at the site of the defect.
 | `tag-inside-value.adi` | `<COMMENT:3>a<b>c ` — a value holding what looks like a tag | **One** record. `<b>` carries no LENGTH but is not `<EOR>` or `<EOH>`, and taking it for a terminator produced two QSOs out of one `<EOR>` |
 | `truncated.adi` | Final record has no `<EOR>` | Keep the partial record, warn (decision 7) |
 | `truncated-tag.adi` | File ends mid-tag | Keep what parsed, warn |
+| `truncated-terminator.adi` | `…W1ABC<EOR` — the file ends one byte inside its last terminator | Complete it. Carrying the partial *and* synthesizing the terminator wrote the file back ending `<EOR><EOR`, which then warned on every open for ever |
+| `duplicate-field.adi` | One record carrying `CALL` twice | Both copies kept and written back — round-trips byte-identical — with a `duplicateFieldInRecord` warning, since only the first is visible in the grid |
 | `unparseable-length.adi` | `<CALL:x>` — the LENGTH is not a number | Keep the field, recover the value, warn `unparseableLength`. Dropping the tag leaves a QSO with no callsign |
 | `huge-length.adi` | `<CALL:9223372036854775807>` — a LENGTH near `Int.max` | Recover, warn `lengthMismatch`. The addition used to overflow and kill the process on SIGTRAP (§6.4) |
 | `stray-bracket.adi` | `<<MODE:3>` — a doubled bracket | Warn `resynchronized`, then read `MODE` normally. Scanning past the second `<` used to yield a field named `<MODE`, silently |

@@ -431,6 +431,42 @@ struct ParserTests {
                 == [.lengthMismatch(field: "CALL", declared: 3, recovered: 5)])
     }
 
+    @Test("a file cut off inside its last <EOR> is completed, not doubled")
+    func truncatedTerminatorIsCompleted() throws {
+        // `…W1ABC<EOR` is a terminator missing one byte. Keeping the partial as trailing
+        // text *and* synthesizing the terminator the record needs wrote the file back
+        // ending `<EOR><EOR`, and the leftover `<EOR` then warned on every open after
+        // that — for ever, since the repair never removed it.
+        let document = try parseFixture("truncated-terminator.adi")
+        #expect(document.records.count == 1)
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.records[0].isTruncated == false, "the QSO's data is all there")
+        #expect(document.warnings.contains { if case .truncatedTag = $0.kind { return true }
+                                             else { return false } })
+
+        let written = String(decoding: ADIFWriter.write(document), as: UTF8.self)
+        #expect(written.hasSuffix("<CALL:5>W1ABC<EOR>"))
+
+        // The point of the repair: opening what was written finds nothing to complain
+        // about. It used to warn on every open, for ever.
+        let reparsed = try ADIFParser.parse(ADIFWriter.write(document))
+        #expect(reparsed.warnings.isEmpty)
+        #expect(reparsed.records.count == 1)
+    }
+
+    @Test("a record carrying the same field twice says so")
+    func duplicateFieldWarns() throws {
+        // Nothing is lost — both copies are written back, and the file round-trips byte
+        // for byte — but only the first is visible: the subscript, the grid, dedupe and
+        // sort all read fields.first. So clearing that cell removes the first copy and
+        // the second appears in the cell, which looks like the clear did nothing. The
+        // warning is what makes that explicable.
+        let document = try parseFixture("duplicate-field.adi")
+        #expect(document.records[0].fields.count == 2)
+        #expect(document.records[0]["CALL"] == "W1ABC")
+        #expect(document.warnings.map(\.kind) == [.duplicateFieldInRecord(field: "CALL")])
+    }
+
     @Test("a stray tag inside a record does not end the record")
     func strayTagIsNotATerminator() throws {
         // ADIF has two terminators. Any other tag without a LENGTH used to be taken for

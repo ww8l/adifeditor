@@ -136,6 +136,10 @@ public struct ADIFWarning: Equatable, Sendable {
 
         /// The file ended in the middle of a tag.
         case truncatedTag(partial: String)
+
+        /// One record carried the same field name twice. Both copies survive the round
+        /// trip, but only the first is visible anywhere in the app — see the scanner.
+        case duplicateFieldInRecord(field: String)
     }
 
     public var kind: Kind

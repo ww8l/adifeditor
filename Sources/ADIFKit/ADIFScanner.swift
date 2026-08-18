@@ -400,6 +400,19 @@ struct ADIFScanner {
                 if indexOfNextBracket(from: tagStart + 1) == nil {
                     let rest = text(tagStart..<scalars.count)
                     warn(.truncatedTag(partial: String(rest.prefix(40))))
+
+                    // A file cut off inside its last terminator — `…W1ABC<EOR` — is a
+                    // terminator missing one byte, not stray text. Carrying it forward
+                    // *and* synthesizing the `<EOR>` the record needs wrote the file back
+                    // ending `<EOR><EOR`, which then warns `truncatedTag` on every open
+                    // for ever after. Completing it instead is the same repair-at-the-
+                    // site-of-the-defect the writer is already doing for the terminator.
+                    let spelling = String(rest.dropFirst()).uppercased()
+                    if spelling == "EOR" || spelling == "EOH" {
+                        result.terminatorSpelling = String(rest.dropFirst())
+                        advance(to: scalars.count)
+                        break
+                    }
                     if result.fields.isEmpty {
                         result.leadingText += rest
                     } else {
@@ -449,6 +462,17 @@ struct ADIFScanner {
 
             advance(to: tag.end)
             let (value, trailing) = readValue(tag: tag)
+
+            // Both copies are kept and both are written back, but only the first is
+            // visible: the record subscript, the grid, dedupe and sort all read
+            // `fields.first`. So clearing the cell removes the first copy and the second
+            // appears in its place, which from the grid looks like the clear did nothing.
+            // Explaining that is worth a warning; changing the model to show both is not
+            // (nothing is lost, and the file round-trips byte for byte).
+            if result.fields.contains(where: { $0.name == ADIFField.normalize(tag.spelling) }) {
+                warn(.duplicateFieldInRecord(field: ADIFField.normalize(tag.spelling)))
+            }
+
             result.fields.append(
                 ADIFField(spelling: tag.spelling,
                           value: value,
