@@ -30,23 +30,35 @@ enum Preferences {
     /// The credentials, assembled from both stores, or `nil` when the app has none.
     ///
     /// `nil` is the resting state §6.5 promises: a fresh install returns nothing here,
-    /// and every caller treats that as "the lookup is unavailable" rather than as an
-    /// error worth reporting.
-    static var credentials: QRZCredentials? {
+    /// and a caller treats it as "the lookup is unavailable" rather than as an error.
+    ///
+    /// A Keychain that *refuses* is a third state and throws, because it is not the same
+    /// news. This used to swallow it into `nil`, so a locked Keychain told the user "no
+    /// QRZ credentials have been entered" — twice, once here and again on the Settings
+    /// status line — and sent them to retype a password they already had. §6.4 asks for a
+    /// diagnostic that names the problem, and that named a different one.
+    ///
+    /// `readPassword` exists so the refusing case can be exercised: the real Keychain
+    /// cannot be made to fail on demand, and this is the branch that was wrong.
+    static func credentials(
+        readPassword: (_ account: String, _ service: String) throws -> String?
+            = Keychain.password
+    ) throws -> QRZCredentials? {
         let username = qrzUsername
         guard !username.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
 
-        // A Keychain that will not answer is reported where the user asked for the
-        // lookup, not from a property getter. Here it simply means "no credentials".
-        guard let password = try? Keychain.password(account: username,
-                                                    service: keychainService),
+        guard let password = try readPassword(username, keychainService),
               !password.isEmpty else { return nil }
 
         return QRZCredentials(username: username, password: password)
     }
 
-    /// Whether QRZ credentials are configured, without fetching the password.
-    static var hasQRZCredentials: Bool { credentials != nil }
+    /// Whether QRZ credentials are configured. Reads the password to find out — there is
+    /// no cheaper answer, since a username on file with nothing in the Keychain behind it
+    /// is not a configured account — and reports a refusing Keychain as not configured,
+    /// which is why the two callers that have somewhere to put an error use
+    /// `credentials()` instead.
+    static var hasQRZCredentials: Bool { (try? credentials()) != nil }
 
     static func setQRZCredentials(username: String, password: String) throws {
         let trimmed = username.trimmingCharacters(in: .whitespaces)

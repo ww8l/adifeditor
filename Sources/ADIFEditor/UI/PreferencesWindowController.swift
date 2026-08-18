@@ -150,11 +150,20 @@ final class PreferencesWindowController: NSWindowController {
         // benefit — the user does not need to see it to know it is there.
         passwordField.stringValue = ""
 
-        let configured = Preferences.hasQRZCredentials
-        removeButton.isEnabled = configured
-        statusLabel.stringValue = configured
-            ? "A password is stored in your Keychain for \(Preferences.qrzUsername)."
-            : "No credentials stored. The lookup is unavailable and the app stays offline."
+        do {
+            let configured = try Preferences.credentials() != nil
+            removeButton.isEnabled = configured
+            statusLabel.stringValue = configured
+                ? "A password is stored in your Keychain for \(Preferences.qrzUsername)."
+                : "No credentials stored. The lookup is unavailable and the app stays offline."
+        } catch {
+            // Not "no credentials stored": there is a username on file and the Keychain
+            // would not answer for it, which is a different problem with a different fix.
+            // Remove stays enabled — clearing the account is one of the few things that
+            // still works, and it is how the user starts over.
+            removeButton.isEnabled = !Preferences.qrzUsername.isEmpty
+            statusLabel.stringValue = error.localizedDescription
+        }
     }
 
     // MARK: - Actions

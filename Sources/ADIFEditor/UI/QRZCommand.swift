@@ -25,8 +25,17 @@ extension LogWindowController {
         guard commitPendingEdit() else { return }
         guard let document = qrzDocument, let window else { return }
 
-        guard let credentials = Preferences.credentials else {
-            offerToConfigureQRZ()
+        let credentials: QRZCredentials
+        do {
+            guard let stored = try Preferences.credentials() else {
+                offerToConfigureQRZ()
+                return
+            }
+            credentials = stored
+        } catch {
+            // The Keychain refused. Saying so is the point: the alert below would send
+            // the user to Settings to retype a password that is already there.
+            NSAlert(error: error).beginSheetModal(for: window)
             return
         }
 
