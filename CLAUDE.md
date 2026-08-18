@@ -174,21 +174,20 @@ it does for a real app icon rather than a generic fallback.
 - **`right-click → Open` no longer bypasses Gatekeeper.** Apple removed it in macOS 15 for
   apps Gatekeeper blocks; the route is System Settings › Privacy & Security › **Open
   Anyway**. README.md already had this right; the release notes did not, having been
-  copied from the sibling project — whose README still carries the stale instruction and
-  has shipped it on six releases.
+  copied from an older project of the author's whose README was never corrected. Text
+  reused from elsewhere carries that elsewhere's stale facts with it.
 
 **Open items:**
 
 - **The repo is on GitHub, private, and going public later.**
-  `https://github.com/ww8l/adifeditor`, created 2026-08-16 at the owner's request, `main`
-  tracking `origin/main`, everything pushed. `gh` is authenticated as `ww8l`. He asked
-  for **private for now, public later** — the flip is his call and his timing; don't run
-  `gh repo edit --visibility public` without being asked.
+  `https://github.com/ww8l/adifeditor`, created 2026-08-16, `main` tracking `origin/main`,
+  everything pushed. The flip to public is the owner's call and his timing; don't run
+  `gh repo edit --visibility public` without being asked. See `CLAUDE.local.md` for what
+  is still outstanding on it.
 
-  Private does not restrict anything about building or releasing. The draft release and
-  its `.dmg` are downloadable by the owner exactly as on the sibling project, whose six
-  releases are all still private drafts that he installs from. Private bites only when
-  handing the `.dmg` to someone who is not him.
+  Private does not restrict anything about building or releasing. A draft release and its
+  `.dmg` are downloadable by the owner either way. Private bites only when handing the
+  `.dmg` to someone else.
 
   **The history scan is the gate on that flip, and it has not been re-run since
   2026-08-15.** Private means a leaked credential is still recoverable by rewriting
@@ -213,12 +212,13 @@ it does for a real app icon rather than a generic fallback.
 - **`fixtures/real/` holds one file.** §11 names WSJT-X, MSHV, and N1MM; none are in
   hand, so the synthetic hostile cases are educated guesses at what those programs do
   wrong. Adding real ones is the cheapest coverage available.
-- **The release pipeline has run twice and nothing else has.** `ci.yml` has never
-  executed — it fires only on `pull_request` and `workflow_dispatch`, and the owner
-  commits straight to main. That is deliberate (decision 19) and not a gap to close: the
-  pre-push hook is the routine gate. But it does mean the CI workflow itself is an unproven
-  path, exactly the category this file keeps warning about. Fire it once by hand before
-  relying on it.
+- **Both workflows have now been proven by running.** `release.yml` twice, and `ci.yml`
+  once by dispatch on 2026-08-18 — green first time, 1m13s, ~12 quota-minutes. `ci.yml`
+  still fires only on `pull_request` and `workflow_dispatch`, which is deliberate
+  (decision 19): the pre-push hook is the routine gate. Its value is what that run
+  confirmed — the runner carries Xcode 26.6 and Swift 6.3.3 against this machine's CLT, so
+  it exercises `Scripts/test.sh`'s Xcode fallback, the branch that was silently broken
+  until 2026-08-16.
 - **DESIGN.md is amended but still behind.** §6.5, §10.4, §3, §5, §7, §11, §13 and §14
   were brought up to date when QRZ landed; §12 was amended on 2026-08-15 for the `.dmg`
   and the xcbuild collision, and describes a pipeline whose triggers decision 19 has since
@@ -226,7 +226,7 @@ it does for a real app icon rather than a generic fallback.
   and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2 say in plain
   words — a reader of DESIGN.md alone would build the wrong app, and decision 18 now means
   they would build a whole feature that was rejected. It also does not mention dedupe or
-  find. The owner has been offered a fold-in three times and hasn't said yes.
+  find.
 - **README is current as of 2026-08-15** and is the one document safe to hand a stranger.
   Install section written, feature list matches what exists, and the byte-identity
   guarantee is stated with its one exception. Its first-launch instructions are correct
@@ -236,26 +236,20 @@ it does for a real app icon rather than a generic fallback.
   forget. Its "no release has been published yet" line is **still accurate** — `v26.8.16`
   is a draft, and a draft is not published. Revisit that sentence when one is, not before.
 
-**Where to pick up (paused 2026-08-16).** Working tree clean, five commits that day, all
-pushed. `.build/ADIF Editor.app` is a *release* bundle stamped 26.8.16, and **it was left
-running** with no document open — quit it before rebuilding, and ask rather than using
-`osascript ... to quit`, which last session parked the app on a save-changes sheet and
-blocked Apple Events until the owner answered.
+**Where to pick up (2026-08-18).** A five-agent code review ran on 2026-08-17 and filed
+issues #1–#39; twenty-two are closed and seven sev:low remain. Working tree clean, `main`
+tracking `origin/main`. Three Actions runs total, all green first time, ~42 quota-minutes
+of 2,000 spent. Session-by-session detail lives in `CLAUDE.local.md` rather than here.
 
-Nothing is waiting on the owner. What landed on 2026-08-16, in order: the GitHub remote
-was created private and everything pushed; CI and release workflows plus the pre-push gate
-went in, along with the `test.sh` fix that path needed; the owner's icon was integrated;
-the release notes' Gatekeeper instructions were corrected; the pipeline was proven with a
-dispatch dry run and then `v26.8.16` was tagged, built and verified as a draft release.
-
-Two Actions runs total, both green first time, ~30 quota-minutes of 2,000 spent.
+If a built bundle is left running, quit it before rebuilding — and ask rather than using
+`osascript ... to quit`, which once parked the app on a save-changes sheet and blocked
+Apple Events until it was answered by hand.
 
 The open build choices, roughly in order of how much they are worth:
 
-- **The DESIGN.md fold-in.** Now the most valuable thing outstanding, and offered four
-  times without a yes. Grows more expensive each session; decision 18 means DESIGN.md
-  describes a feature that was built and rejected, and §12 now describes a pipeline whose
-  triggers decision 19 narrowed.
+- **The DESIGN.md fold-in.** The most valuable thing outstanding, and it grows more
+  expensive each session: decision 18 means DESIGN.md describes a feature that was built
+  and rejected, and §12 describes a pipeline whose triggers decision 19 narrowed.
 - **Save selection as a new file** — the last of M2 — and **M3's replace**.
 - **Bump `actions/checkout` and `actions/upload-artifact` to `@v5`.** Both target Node 20,
   which GitHub has deprecated; runs are being forced onto Node 24 and warn each time.
@@ -478,9 +472,9 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
 18. **Find, not filters. §10.1's column filters are dropped.** *(2026-08-15, owner's
     ruling.)* A filter bar was built first — per-column conditions, a value picker, tokens
     for active terms, and the row-to-record mapping that hiding rows forces on every
-    operation in the app. The owner's verdict on seeing it: *"I don't need all that
-    filtering, you're making it more complex than I asked."* He asked for ⌘F instead. All
-    of it was deleted; `ADIFFind` is about seventy lines and hides nothing.
+    operation in the app. The owner rejected it on sight as far more complexity than he
+    had asked for, and asked for ⌘F instead. All of it was deleted; `ADIFFind` is about
+    seventy lines and hides nothing.
 
     What this gives up is real and should not be discovered at a Field Day. §10.1 names
     filtering as the primitive behind "filter on `OPERATOR`, select the rows that aren't
@@ -505,22 +499,23 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
     Everything routine runs on this machine through `.githooks/pre-push` →
     `Scripts/ci-local.sh`, free and unlimited.
 
-    The reasoning is the sibling project's, inverted. There, macOS was dropped from CI
-    because Linux and Windows covered what a Mac laptop cannot check locally. Here the app
-    is macOS-only, so there is no cheap leg to keep and every hosted run bills at 10x — but
-    the same premise cuts deeper in our favour: the development machine *is* the target
-    platform, so the free local check tests the real thing rather than a stand-in. The
-    rented Mac earns its multiplier on exactly two jobs: building what ships, and giving a
-    clean-checkout second opinion with the full Xcode this machine lacks (decision 9).
+    The reasoning is borrowed from another project of the author's, inverted. There, macOS
+    was dropped from CI because Linux and Windows covered what a Mac laptop cannot check
+    locally. Here the app is macOS-only, so there is no cheap leg to keep and every hosted
+    run bills at 10x — but the same premise cuts deeper in our favour: the development
+    machine *is* the target platform, so the free local check tests the real thing rather
+    than a stand-in. The rented Mac earns its multiplier on exactly two jobs: building what
+    ships, and giving a clean-checkout second opinion with the full Xcode this machine
+    lacks (decision 9).
 
-    Versions are CalVer matching the sibling project: `vYY.M.D`, no zero padding —
+    Versions are CalVer, matching that same project: `vYY.M.D`, no zero padding —
     `v26.8.3`, `v26.8.13`. The tag is the single source of truth; `MARKETING_VERSION`
     stamps it into the bundled plist at build time and never back into `Support/Info.plist`.
     Two releases in one day collide, and the escape hatch is a fourth component
     (`v26.8.16.1`), which would need the tag glob widened. It has not come up.
 
-    Releases are **drafts** and stay that way unless the owner publishes one — the sibling
-    project's six releases are all still drafts he installs from. Nothing is notarized and
+    Releases are **drafts** and stay that way unless the owner publishes one, which is
+    enough for an author installing his own build. Nothing is notarized and
     nothing will be: no paid Apple Developer account, ad-hoc signing only, with the
     Gatekeeper bypass documented in the README and the release notes. A pleasant
     consequence worth protecting: **there are no secrets in this repo and no reason to add

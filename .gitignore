@@ -8,3 +8,6 @@ DerivedData/
 build/
 dist/
 *.app
+
+# Private working notes — the candid half of CLAUDE.md, deliberately not published.
+CLAUDE.local.md
