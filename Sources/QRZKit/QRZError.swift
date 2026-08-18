@@ -29,6 +29,12 @@ public enum QRZError: Error, Equatable, Sendable {
     /// call, a club station, a busted decode — and not a reason to abandon a batch.
     case callsignNotFound(String)
 
+    /// QRZ is refusing further lookups for now — the daily query allowance is spent, or
+    /// the account is asking too fast. Every remaining callsign in a batch would get the
+    /// same answer, so this stops the batch: continuing is both useless and the surest
+    /// way to make the block last longer.
+    case rateLimited(String)
+
     /// QRZ answered, but with something this code does not recognise. The message is
     /// QRZ's own text, passed through rather than interpreted, because the service adds
     /// new ones without warning and inventing a friendlier wording would only obscure it.
@@ -57,6 +63,8 @@ extension QRZError: LocalizedError {
             return "This lookup needs an active QRZ XML subscription: \(message)"
         case .sessionExpired(let message):
             return "The QRZ session expired and could not be renewed: \(message)"
+        case .rateLimited(let message):
+            return "QRZ is limiting lookups from this account: \(message)"
         case .callsignNotFound(let callsign):
             return "QRZ has no record of \(callsign)."
         case .serviceError(let message):
@@ -80,7 +88,7 @@ extension QRZError: LocalizedError {
         case .callsignNotFound, .serviceError, .malformedResponse:
             return false
         case .notConfigured, .badCredentials, .subscriptionRequired, .sessionExpired,
-             .transportFailure:
+             .rateLimited, .transportFailure:
             return true
         }
     }

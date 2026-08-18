@@ -126,6 +126,34 @@ struct QRZSessionTests {
         }
     }
 
+    @Test("a rate limit is recognised as one", arguments: [
+        "Excessive queries in a 24 hour period",
+        "You have exceeded the maximum number of queries",
+        "Rate limit exceeded, try again later",
+        "Too many requests",
+        "Daily limit reached",
+    ])
+    func rateLimited(message: String) {
+        // §11 names rate limit among the failure shapes the suite must cover, and it was
+        // the one shape untested. QRZ signals it as English inside <Session><Error>, so
+        // it classified as .serviceError, whose stopsBatch is false — a limit reached on
+        // QSO 3 of 80 spent 77 more requests confirming it.
+        #expect(QRZSession.classify(message, callsign: "W1ABC") == .rateLimited(message))
+        #expect(QRZError.rateLimited(message).stopsBatch)
+    }
+
+    @Test("a rate limit reaches the caller from a real response")
+    func rateLimitedLookup() async throws {
+        let transport = FakeTransport(bodies: [
+            QRZFixtures.session(),
+            QRZFixtures.sessionError("Excessive queries in a 24 hour period")
+        ])
+
+        await #expect(throws: QRZError.rateLimited("Excessive queries in a 24 hour period")) {
+            try await session(transport).lookup("W1ABC")
+        }
+    }
+
     @Test("wording QRZKit does not recognise is passed through, not guessed at")
     func unknownErrorsPassThrough() {
         // QRZ adds messages without warning. Inventing a friendlier diagnosis would hide

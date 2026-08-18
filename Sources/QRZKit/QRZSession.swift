@@ -202,6 +202,15 @@ public actor QRZSession {
                     "does not have permission") {
             return .subscriptionRequired(message)
         }
+        // Before the catch-all, because a rate limit that classified as `.serviceError`
+        // did not stop the batch — so a limit reached on QSO 3 of 80 spent 77 more
+        // requests learning the same thing, which is what earns a longer block. QRZ's
+        // exact wording here is not documented, so this matches several phrasings; the
+        // failure mode of a miss is the old behaviour, not something worse.
+        if mentions("exceeded", "excessive", "rate limit", "too many", "query limit",
+                    "daily limit", "quota") {
+            return .rateLimited(message)
+        }
         return .serviceError(message)
     }
 }

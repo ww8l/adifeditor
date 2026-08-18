@@ -78,6 +78,23 @@ struct QRZBatchTests {
         #expect(transport.requestCount == 1, "and does not keep trying the password")
     }
 
+    @Test("a rate limit stops the batch instead of spending the rest of it")
+    func stopsOnRateLimit() async {
+        // The pause between requests exists to avoid being rate-limited; carrying on
+        // through one is the same mistake at a larger scale, and it is what makes a
+        // temporary block a longer one.
+        let transport = FakeTransport(responses: [
+            .success(Data(QRZFixtures.session().utf8)),
+            .success(Data(QRZFixtures.callsign("W1ABC").utf8)),
+            .success(Data(QRZFixtures.sessionError("Excessive queries in a 24 hour period").utf8))
+        ])
+        let result = await run(["W1ABC", "K2XYZ", "N3DEF"], on: transport)
+
+        #expect(result.found.keys.contains("W1ABC"), "the work already done survives")
+        #expect(result.stoppedEarly == .rateLimited("Excessive queries in a 24 hour period"))
+        #expect(result.notAttempted == ["K2XYZ", "N3DEF"])
+    }
+
     @Test("the batch never throws, whatever happens")
     func neverThrows() async {
         // §6.4. The caller has partial results to show and a reason to display; there is
