@@ -454,6 +454,50 @@ struct ParserTests {
         #expect(reparsed.records.count == 1)
     }
 
+    @Test("resynchronizing reports how much it actually swallowed")
+    func resyncCountsWhatItSkipped() throws {
+        // A tag whose name cannot be a field name — the shape a failed log download
+        // arrives in — is skipped along with whatever follows it up to the next real
+        // tag. The warning used to say `skipped: 1` however much had gone, because the
+        // scanner moved one character at a time: a number the operator cannot act on,
+        // and one warning per bracket for a whole HTML page.
+        let text = "Test header\n<EOH>\n<a href=\"http://x/y\">W1ABC<CALL:5>K2XYZ<EOR>\n"
+        let document = try ADIFParser.parse(Data(text.utf8))
+
+        #expect(document.records.count == 1)
+        #expect(document.records[0]["CALL"] == "K2XYZ")
+        #expect(document.warnings.map(\.kind) == [.resynchronized(skipped: 26)])
+
+        // Skipped, not dropped: every byte of it is still in the file that comes back.
+        #expect(ADIFWriter.write(document) == Data(text.utf8))
+    }
+
+    @Test("a file that is not ADIF cannot produce an unbounded warning list")
+    func warningsAreCapped() throws {
+        // §6.4's own example — the HTML page a failed download returns — has a defect
+        // every few bytes. 750 KB of it produced a hundred thousand warnings, an array
+        // nobody reads to the end of and which the banner never showed past the first.
+        var html = "<html>\n"
+        for i in 0..<5_000 { html += "<p>line \(i)</p>\n" }
+        let data = Data(html.utf8)
+
+        let document = try ADIFParser.parse(data)
+        #expect(document.warnings.count == ADIFScanner.warningLimit)
+        #expect(document.suppressedWarnings > 0)
+
+        // Counted, not discarded: a file with ten thousand problems must not be reported
+        // as having a hundred. And the bytes still all come back (§6.2a).
+        #expect(document.warnings.count + document.suppressedWarnings > 5_000)
+        #expect(ADIFWriter.write(document) == data)
+    }
+
+    @Test("a well-formed file is nowhere near the cap")
+    func realFileWarningsAreNotSuppressed() throws {
+        let document = try parseFixture("FT8CN6469053684847039306.txt")
+        #expect(document.warnings.isEmpty)
+        #expect(document.suppressedWarnings == 0)
+    }
+
     @Test("a record carrying the same field twice says so")
     func duplicateFieldWarns() throws {
         // Nothing is lost — both copies are written back, and the file round-trips byte

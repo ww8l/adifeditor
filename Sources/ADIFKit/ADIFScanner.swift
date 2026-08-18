@@ -24,6 +24,14 @@ struct ADIFScanner {
 
     var warnings: [ADIFWarning] = []
 
+    /// How many warnings past `warningLimit` were found and dropped.
+    var suppressedWarnings: Int = 0
+
+    /// Enough to describe any real file's problems, and a bound on what a file that is
+    /// not ADIF at all can cost. The banner shows the first warning and a count of the
+    /// rest, so the hundred-thousandth entry was never going to be read — only allocated.
+    static let warningLimit = 100
+
     /// `startingAtByte` is what the caller already consumed before this text began.
     init(text: String, startingAtByte startByte: Int = 0) {
         self.scalars = Array(text.unicodeScalars)
@@ -343,6 +351,10 @@ struct ADIFScanner {
     }
 
     private mutating func warn(_ kind: ADIFWarning.Kind) {
+        guard warnings.count < Self.warningLimit else {
+            suppressedWarnings += 1
+            return
+        }
         warnings.append(ADIFWarning(kind: kind, byteOffset: byteOffset))
     }
 
@@ -423,13 +435,35 @@ struct ADIFScanner {
                     result.isTruncated = !result.fields.isEmpty
                     break
                 }
-                warn(.resynchronized(skipped: 1))
-                if !result.fields.isEmpty {
-                    result.fields[result.fields.count - 1].trailingText += "<"
-                } else {
-                    result.leadingText += "<"
+                // Skip forward to the next `<` that actually parses, and report the
+                // whole run. Skipping one character at a time reported
+                // `resynchronized(skipped: 1)` however much was really absorbed — for
+                // `<a href="http://x/y">W1ABC<CALL:5>…` the banner said one character
+                // when twenty-six had gone, which is a number the operator cannot act
+                // on. It also means a run of markup is one warning rather than one per
+                // bracket.
+                var probe = tagStart + 1
+                var resume = scalars.count
+                while let candidate = indexOfNextTagStart(from: probe) {
+                    // Stop at a tag the file ends inside, too: the branch above has
+                    // something specific to say about that one, and absorbing it here
+                    // would swallow the diagnostic with it.
+                    if parseTag(at: candidate) != nil
+                        || indexOfNextBracket(from: candidate + 1) == nil {
+                        resume = candidate
+                        break
+                    }
+                    probe = candidate + 1
                 }
-                advance(to: tagStart + 1)
+
+                let skipped = text(tagStart..<resume)
+                warn(.resynchronized(skipped: skipped.unicodeScalars.count))
+                if !result.fields.isEmpty {
+                    result.fields[result.fields.count - 1].trailingText += skipped
+                } else {
+                    result.leadingText += skipped
+                }
+                advance(to: resume)
                 continue
             }
 
