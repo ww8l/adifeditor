@@ -10,6 +10,13 @@ what the world actually contains. If a fixture breaks the parser, the parser is 
 Genuine logger output, committed unmodified — original filename, original extension,
 callsigns intact (these are public log data, per §11).
 
+**The digits in the FT8CN filename are not an identifier of anything.** FT8CN exports
+through `File.createTempFile("FT8CN", ".txt", …)` (`GeneralVariables.getTempFile`), and
+Java names a temp file by appending `Math.abs(random.nextLong())` to the prefix. So the
+19 digits are a fresh random 63-bit number per export, carrying nothing about the phone,
+the operator or the time. Checked because a long opaque number in a filename that is about
+to be published is worth being sure of; recorded so nobody has to check twice.
+
 | File | Source | Notable |
 |---|---|---|
 | `FT8CN6469053684847039306.txt` | FT8CN | 66 QSOs, 1056 fields, all lengths correct. Lowercase `<eoh>`/`<eor>`; field-name casing mixed *within* a record (`<call:4>` beside `<QSL_RCVD:1>`); bare `FT8CN ADIF Export<eoh>` header with no `ADIF_VER` or `PROGRAMID`; exactly one space after every field. No `MY_SIG_INFO`. Written to `.txt`, not `.adi`. |
