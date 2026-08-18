@@ -461,4 +461,63 @@ struct EditingTests {
         #expect(document.recordBySettingValue("X", forColumn: "CALL", inRecordAt: 7) == nil)
         #expect(document.recordBySettingValue("X", forColumn: "CALL", inRecordAt: -1) == nil)
     }
+
+    // MARK: - Line separators
+
+    @Test("sorting a file that ends without a newline does not fuse two QSOs")
+    func sortKeepsOneQSOPerLine() throws {
+        // "Ends without a newline" was stored on whichever record happened to be last,
+        // so sorting carried the empty separator into the middle of the file and put two
+        // QSOs on one line. A line-oriented diff of before and after then showed a change
+        // nobody made — the exact property §8's line convention exists to provide.
+        let text = "<CALL:5>W2DEF <EOR>\n<CALL:5>W1ABC <EOR>"
+        var document = try ADIFParser.parse(Data(text.utf8))
+        document.records = document.recordsSorted(byColumn: "CALL", ascending: true)
+
+        #expect(String(decoding: ADIFWriter.write(document), as: UTF8.self)
+                    == "<CALL:5>W1ABC <EOR>\n<CALL:5>W2DEF <EOR>")
+    }
+
+    @Test("a CRLF file that ends without a newline is repaired with CRLF")
+    func sortUsesTheFilesOwnLineEnding() throws {
+        let text = "<CALL:5>W2DEF <EOR>\r\n<CALL:5>W1ABC <EOR>"
+        var document = try ADIFParser.parse(Data(text.utf8))
+        document.records = document.recordsSorted(byColumn: "CALL", ascending: true)
+
+        #expect(String(decoding: ADIFWriter.write(document), as: UTF8.self)
+                    == "<CALL:5>W1ABC <EOR>\r\n<CALL:5>W2DEF <EOR>")
+    }
+
+    @Test("a record copied from a file that ends without a newline pastes cleanly")
+    func pastedRecordCarriesASeparator() throws {
+        // The other half of the same bug. Copy the last QSO of a log that ends without a
+        // newline, paste it into the middle of another, and it used to arrive carrying an
+        // empty separator and fuse with whatever followed. It carries the file's own
+        // separator now, because the missing newline was never its property to begin with.
+        let source = try ADIFParser.parse(
+            Data("<CALL:5>W1ABC <EOR>\n<CALL:5>W2DEF <EOR>".utf8))
+        let copied = try #require(source.records.last)
+
+        var destination = try ADIFParser.parse(
+            Data("<CALL:5>W3GHI <EOR>\n<CALL:5>W4JKL <EOR>\n".utf8))
+        destination.records.insert(copied, at: 1)
+
+        #expect(String(decoding: ADIFWriter.write(destination), as: UTF8.self)
+                    == "<CALL:5>W3GHI <EOR>\n<CALL:5>W2DEF <EOR>\n<CALL:5>W4JKL <EOR>\n")
+    }
+
+    @Test("a log written all on one line is left on one line")
+    func oneLineFileIsNotReflowed() throws {
+        // The repair applies only where the convention was already being kept. This file
+        // never put one QSO per line, so inserting breaks into it would be rewriting
+        // bytes on a rule it never agreed to (§6.2a).
+        let text = "<CALL:5>W2DEF<EOR><CALL:5>W1ABC<EOR>"
+        let data = Data(text.utf8)
+        var document = try ADIFParser.parse(data)
+        #expect(ADIFWriter.write(document) == data)
+
+        document.records = document.recordsSorted(byColumn: "CALL", ascending: true)
+        #expect(String(decoding: ADIFWriter.write(document), as: UTF8.self)
+                    == "<CALL:5>W1ABC<EOR><CALL:5>W2DEF<EOR>")
+    }
 }

@@ -17,6 +17,18 @@ public struct ADIFDocument: Equatable, Sendable {
     /// A UTF-8 BOM, if the file opened with one. Preserved, not stripped (decision 4).
     public var byteOrderMark: Bool
 
+    /// True when the file ended immediately after its last `<EOR>`, with no line break.
+    ///
+    /// A property of the file, deliberately, even though only one record can show it.
+    /// Held on the record that happened to be last, it travelled with that record: sort
+    /// the log and the empty separator landed in the middle, fusing two QSOs onto one
+    /// line. §8's one-QSO-per-line convention exists so a line-oriented diff of two logs
+    /// means something, and that is exactly what it stopped meaning.
+    ///
+    /// Set only for a file that keeps the convention in the first place. A log written
+    /// entirely on one line has no separators to speak of and is left alone.
+    public var endsWithoutFinalSeparator: Bool
+
     /// Non-fatal problems found while parsing. Empty for a well-formed file.
     public var warnings: [ADIFWarning]
 
@@ -24,11 +36,13 @@ public struct ADIFDocument: Equatable, Sendable {
         header: String? = nil,
         records: [ADIFRecord] = [],
         byteOrderMark: Bool = false,
+        endsWithoutFinalSeparator: Bool = false,
         warnings: [ADIFWarning] = []
     ) {
         self.header = header
         self.records = records
         self.byteOrderMark = byteOrderMark
+        self.endsWithoutFinalSeparator = endsWithoutFinalSeparator
         self.warnings = warnings
     }
 

@@ -92,7 +92,31 @@ public enum ADIFParser {
         }
 
         document.warnings.append(contentsOf: scanner.warnings)
+        liftFinalSeparator(&document)
         return document
+    }
+
+    /// Moves "the file ends without a line break" off the last record and onto the
+    /// document, giving that record the separator every other record uses.
+    ///
+    /// Without this the fact is stored on whichever record is last, and a sort carries it
+    /// into the middle of the file — see `ADIFDocument.endsWithoutFinalSeparator`.
+    ///
+    /// Does nothing unless some other record actually has a separator. A log written
+    /// entirely on one line never kept the convention, so there is nothing to restore and
+    /// inventing a line break would rewrite bytes nobody edited (§6.2a).
+    private static func liftFinalSeparator(_ document: inout ADIFDocument) {
+        guard let last = document.records.last, last.trailingText.isEmpty else { return }
+
+        var separator: String?
+        for record in document.records.dropLast() where !record.trailingText.isEmpty {
+            separator = record.trailingText.contains("\r\n") ? "\r\n" : "\n"
+            break
+        }
+        guard let separator else { return }
+
+        document.records[document.records.count - 1].trailingText = separator
+        document.endsWithoutFinalSeparator = true
     }
 
     /// Reassembles the header's verbatim text from a scan result.

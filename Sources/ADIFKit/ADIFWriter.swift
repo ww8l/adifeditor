@@ -16,7 +16,9 @@ public enum ADIFWriter {
         if document.byteOrderMark { out.unicodeScalars.append("\u{FEFF}") }
         if let header = document.header { out += header }
 
-        for record in document.records {
+        let lastIndex = document.records.count - 1
+
+        for (index, record) in document.records.enumerated() {
             for field in record.fields {
                 out += render(field)
                 out += field.trailingText
@@ -25,6 +27,12 @@ public enum ADIFWriter {
             // the file being repaired at the exact site of its defect, which is the one
             // permitted departure from byte-identity.
             out += "<\(record.terminatorSpelling)>"
+
+            // Ending without a final line break is a fact about the *file*, held on the
+            // document rather than on whichever record happens to be last. It is applied
+            // here, at the end, so that reordering the records cannot carry it into the
+            // middle and fuse two QSOs onto one line.
+            if index == lastIndex, document.endsWithoutFinalSeparator { continue }
             out += record.trailingText
         }
 
