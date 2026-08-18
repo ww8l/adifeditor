@@ -147,7 +147,14 @@ is built.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+GNU General Public License v3.0 or later. See [LICENSE](LICENSE).
+
+In short: you may use, study, modify and share this program freely. If you distribute a
+modified version, you have to make your source available under the same terms — so this
+stays open for whoever comes after you. And, as with any licence of this kind, the
+program comes with **no warranty of any kind**; you use it at your own risk (GPL §§15–17).
+
+Copyright © 2026 Tim Annable.
 
 This is a clean-room implementation written against the public ADIF specification at
 [adif.org](https://adif.org). It is not derived from, affiliated with, or endorsed by

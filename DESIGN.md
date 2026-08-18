@@ -57,7 +57,19 @@ The name "ADIF Editor" is intentionally generic and descriptive. Do not name the
 its bundle, its repository, or its documentation in any way that suggests affiliation
 with or derivation from ADIF Master.
 
-License: open source, permissive (MIT unless the owner decides otherwise).
+License: **GNU GPL v3.0 or later** (owner's ruling, 2026-08-18). This section originally
+read "open source, permissive (MIT unless the owner decides otherwise)", and the MIT file
+that arrived with the project skeleton was that default rather than a decision — the
+question was never actually put to the owner until the repository was about to go public.
+Asked then, he chose copyleft: a modified version that is distributed has to ship its
+source too, so the program cannot be taken closed. The as-is disclaimer is unchanged in
+substance; GPL §§15-17 say it at more length than MIT did.
+
+Relicensing stays possible for as long as the owner is the sole copyright holder — the
+licence grants rights to others, it does not remove his own — which is what keeps a
+proprietary build viable if one is ever wanted. That ends the first time an outside
+contribution is merged, so any PR that is accepted needs the contributor's agreement
+that their work may be relicensed.
 
 ## 5. Platform and stack
 

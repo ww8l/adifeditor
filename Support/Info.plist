@@ -25,7 +25,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Tim Annable. MIT licensed.</string>
+	<string>Copyright © 2026 Tim Annable. GPL-3.0-or-later. No warranty.</string>
 
 	<!-- No NSAppTransportSecurity key, no URL schemes, no services. The one connection
 	     the app can make is the QRZ lookup (§6.5 as amended, §10.4), which is plain HTTPS

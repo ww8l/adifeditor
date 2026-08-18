@@ -543,5 +543,11 @@ icons, or branding, and nothing may be named to suggest affiliation with it.
 ## Identity
 
 - Bundle identifier: `com.ww8l.adifeditor`
-- Copyright: Tim Annable, 2026, MIT
+- Copyright: Tim Annable, 2026. **GPL-3.0-or-later** (changed from MIT on 2026-08-18,
+  owner's ruling, before the repository went public — see DESIGN.md §4). The MIT file was
+  a skeleton default nobody had chosen; asked directly, he chose copyleft.
+- **Relicensing depends on sole authorship.** He can publish under other terms whenever he
+  likes because he owns all of it. Merging an outside contribution ends that unless the
+  contributor agrees their work may be relicensed — worth asking in the PR thread, since
+  it is the difference between keeping a Mac App Store build possible and not.
 - The app name "ADIF Editor" is intentionally generic (§4).
