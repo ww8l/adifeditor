@@ -133,6 +133,41 @@ struct FindTests {
         #expect(matches.previous(before: 3) == nil)
     }
 
+    // MARK: - Folding
+
+    /// The reason `.diacriticInsensitive` is in the search options, written down so a
+    /// tidy-up cannot remove it silently — dropping it used to pass the whole suite,
+    /// because every other string in this file is ASCII.
+    ///
+    /// An operator types on the keyboard in front of them. A log of European contacts is
+    /// full of names and QTHs they have no key for, and a search that made them produce
+    /// `ü` before it would find `Grüße` would be a search they stopped using.
+    @Test("a search matches through accents the operator cannot type", arguments: [
+        "grusse", "GRUSSE", "Grüße", "gruße", "russ"
+    ])
+    func foldsDiacritics(query: String) throws {
+        let log = try parse("""
+            <CALL:5>DL1AB <COMMENT:16>Grüße aus Köln <EOR>
+            <CALL:5>W1ABC <COMMENT:5>plain <EOR>
+
+            """)
+
+        #expect(log.find(query).rows == [0])
+    }
+
+    @Test("folding accents does not make everything match everything")
+    func foldingIsNotFuzzy() throws {
+        let log = try parse("""
+            <CALL:5>DL1AB <COMMENT:16>Grüße aus Köln <EOR>
+            <CALL:5>W1ABC <COMMENT:5>plain <EOR>
+
+            """)
+
+        #expect(log.find("grasse").isEmpty, "a different vowel is a different word")
+        #expect(log.find("koln").rows == [0])
+        #expect(log.find("kolner").isEmpty)
+    }
+
     // MARK: - Counting
 
     @Test("a match reports its place in the list, counting from one")
