@@ -1,0 +1,672 @@
+<!--
+  The ADIF Editor manual.
+
+  Rendered to docs/ADIF-Editor-Manual.pdf by Scripts/manual.sh. {{VERSION}} and
+  {{DATE}} are substituted at render time from the git tag and the day, so this file
+  never carries a stale version number.
+
+  Screenshots live in images/ and are staged by docs/manual/SHOTS.md. When a command
+  changes, retake its shot from that recipe rather than describing the old one.
+-->
+<meta charset="utf-8">
+<title>ADIF Editor Manual</title>
+<link rel="stylesheet" href="manual.css">
+
+<div class="cover">
+    <img src="images/app-icon.png" alt="">
+    <div class="cover-title">ADIF Editor</div>
+    <p class="cover-sub">A native macOS editor for amateur radio ADIF log files,
+        with purpose-built tools for Parks on the Air.</p>
+    <div class="cover-rule"></div>
+    <div class="cover-meta">
+        User manual<br>
+        Version {{VERSION}} &middot; {{DATE}}<br>
+        Tim Annable &middot; WW8L
+    </div>
+</div>
+
+<div class="toc">
+    <h2>Contents</h2>
+    <ol>
+        <li><span>What this is</span> <span class="what">and what it deliberately is not</span></li>
+        <li><span>Installing</span> <span class="what">including the first-launch warning</span></li>
+        <li><span>Opening a log</span> <span class="what">any file, whatever its extension</span></li>
+        <li><span>The window</span> <span class="what">grid, columns, toolbar</span></li>
+        <li><span>Editing</span> <span class="what">cells, sorting, selecting, moving QSOs</span></li>
+        <li><span>Finding</span> <span class="what">and the trick that replaces filtering</span></li>
+        <li><span>Duplicates</span> <span class="what">found, shown, then removed</span></li>
+        <li><span>Filling from QRZ</span> <span class="what">the one thing that uses the network</span></li>
+        <li><span>The POTA command</span> <span class="what">one park or ten</span></li>
+        <li><span>Saving, and what is guaranteed</span> <span class="what">byte-for-byte</span></li>
+        <li><span>Keyboard shortcuts</span></li>
+        <li><span>When something looks wrong</span></li>
+        <li><span>Licence</span></li>
+    </ol>
+</div>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">1</span>What this is</h2>
+
+<p>POTA activators log with contest and digital-mode software — WSJT-X, MSHV, N1MM,
+FT8CN — none of which knows anything about Parks on the Air. The <code>.adi</code> files
+they produce are valid ADIF but lack the <code>MY_SIG_INFO</code> field carrying the park
+reference, which POTA's uploader needs. Every activation therefore ends in the same
+manual edit: add a column, put the park reference on every row, save it under a
+particular filename. An n-fer — one activation inside several parks at once — needs that
+done once per park, into separate files.</p>
+
+<p>ADIF Editor makes that one command, and around it does the editing a log actually
+needs: correcting a mistyped callsign, trimming the contacts that were not part of the
+activation, removing a QSO logged twice, filling in the name and county you would
+otherwise type by hand.</p>
+
+<div class="note promise">
+    <span class="label">The promise underneath all of it</span>
+    <p>A file you open and save without editing comes back <strong>byte-for-byte
+    identical</strong> to what went in. Not merely field-preserving — identical, down to
+    field-name casing, zero-length fields, line endings and header bytes. Vendor
+    extensions and fields the app has never heard of survive untouched, because nothing
+    it does not understand is ever rewritten. Section&nbsp;10 covers the single
+    exception.</p>
+</div>
+
+<h3>What it is not</h3>
+
+<p>It is not a logger: no radio control, no clock, no QSO entry form, no logbook of its
+own. It edits files that loggers produce. It never uploads anything — you upload to POTA
+yourself. It reads and writes one format, ADI, and no other: no ADX, Cabrillo, CSV or
+JSON. There is no telemetry, no analytics, no crash reporting and no update check.</p>
+
+<p>It makes exactly one kind of network connection, and only when you ask for it by
+name: a QRZ callsign lookup (section&nbsp;8). With no QRZ credentials stored, the app
+never opens a connection at all.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">2</span>Installing</h2>
+
+<p>ADIF Editor needs <strong>macOS 14 or later</strong>. It is a universal build and runs
+natively on both Apple Silicon and Intel.</p>
+
+<p>Download the <code>.dmg</code>, open it, and drag <strong>ADIF Editor</strong> onto
+the <strong>Applications</strong> shortcut beside it.</p>
+
+<h3>The first launch will be blocked</h3>
+
+<p>It will, and that is expected — it is not a sign that anything is wrong with the
+download. ADIF Editor is ad-hoc signed and <strong>not notarized</strong>. Notarizing
+requires a paid Apple Developer account, which this project does not have, so macOS
+treats the app as coming from an unidentified developer and refuses to open it the first
+time.</p>
+
+<p>There are three ways past it. Pick one.</p>
+
+<p><strong>1. Open Anyway.</strong> Double-click the app and dismiss the warning. Open
+<strong>System Settings ▸ Privacy &amp; Security</strong>, scroll to
+<strong>Security</strong>, and click <strong>Open Anyway</strong> beside the message
+naming ADIF Editor. Confirm, and authenticate if asked. You do this once.</p>
+
+<p><strong>2. Remove the quarantine flag</strong>, if you would rather use the
+Terminal:</p>
+
+<pre>xattr -dr com.apple.quarantine "/Applications/ADIF Editor.app"</pre>
+
+<p><strong>3. Build it from source.</strong> An app you build yourself is not
+quarantined, so none of this applies to it. The repository's <code>README.md</code> has
+the two commands.</p>
+
+<div class="note heads-up">
+    <span class="label">Not the old advice</span>
+    <p>Control-clicking an app and choosing <strong>Open</strong> used to bypass this.
+    Apple removed that route in macOS&nbsp;15 for apps Gatekeeper blocks. If you find
+    instructions saying otherwise — including in older projects of mine — they are out of
+    date. Use <strong>Open Anyway</strong>.</p>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">3</span>Opening a log</h2>
+
+<p>Open a log with <kbd>⌘O</kbd>, by dragging it onto the app's icon, or by
+double-clicking an <code>.adi</code> file once ADIF Editor is the app macOS associates
+with it. Recently opened logs are under <strong>File ▸ Open Recent</strong>.</p>
+
+<h3>The extension does not matter</h3>
+
+<p>FT8CN writes ADIF content to files named <code>.txt</code>. Other programs use
+<code>.adif</code>, or no extension at all. ADIF Editor judges a file by what is inside
+it and opens what it is given, so there is nothing to rename first. The screenshots in
+this manual are of an FT8CN log named
+<code>FT8CN6469053684847039306.txt</code>, opened exactly as it came off the phone.</p>
+
+<h3>If the file has problems</h3>
+
+<p>Real logs are sometimes malformed — a truncated download, a hand edit that went
+wrong, a program that miscounts the length of a field holding accented characters. ADIF
+Editor recovers what it can, opens the file anyway, and tells you what it had to do in a
+banner under the title bar. Section&nbsp;10 explains what those messages mean.</p>
+
+<p>There is exactly one problem it will not open past: a file that is not valid UTF-8.
+Guessing at the encoding would silently change the bytes of a log you did not edit, so
+instead it refuses and names the byte offset of the first invalid sequence.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">4</span>The window</h2>
+
+<p>One window per log. Every QSO is a row; every ADIF field in the file is a column.</p>
+
+<figure>
+    <img src="images/01-window.png" alt="The main window showing a log in a grid">
+    <figcaption><b>Figure 1.</b> A 66-QSO FT8CN log. The row numbers on the left are the
+    grid's own count, and are what the duplicate and QRZ sheets refer to. The three
+    toolbar buttons at the top right are the whole of the app's commands: POTA, Dedupe
+    and QRZ.</figcaption>
+</figure>
+
+<h3>Why there are so many columns, and why two files differ</h3>
+
+<p>The columns are not a fixed list ADIF Editor decided on — they are the fields your
+logger actually wrote. A file from FT8CN carries different fields from one written by
+WSJT-X, so the two open with different columns, and neither is wrong. Fields the ADIF
+specification has never heard of get a column too, including a logger's private
+<code>APP_*</code> extensions.</p>
+
+<p>A field takes the place it holds in the first QSO that carries it, and once a column
+has been placed it does not move. That matters more than it sounds: it means clearing a
+cell in the first row does not shuffle its column off to the far right.</p>
+
+<p>An empty cell means the field is absent from that QSO, or present and empty. Both
+are shown the same way, and both are preserved when you save.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">5</span>Editing</h2>
+
+<h3>Cells</h3>
+
+<p>Click a row to select it, then click the cell again to edit it. Type, and press
+<kbd>Return</kbd> or <kbd>Tab</kbd> to commit — or <kbd>Escape</kbd> to abandon what you
+typed. Every edit is undoable with <kbd>⌘Z</kbd>, all the way back to the file you
+opened.</p>
+
+<figure>
+    <img src="images/03-editing.png" alt="A grid square cell open for editing">
+    <figcaption><b>Figure 2.</b> A <code>GRIDSQUARE</code> cell open for
+    editing.</figcaption>
+</figure>
+
+<p>Clearing a cell removes that field from the QSO — that is what an empty field means
+when the file is written back. This is the one place the app treats "empty" as a
+deliberate act rather than something to preserve, because you did it on purpose.</p>
+
+<h3>Sorting</h3>
+
+<p>Click any column header to sort on it; click again to reverse. Sorting is a view of
+the log, not an edit to it — but it is the log's order that gets written when you save,
+so a sort you leave in place is a sort you will find in the file. Sorting on
+<code>QSO_DATE</code> and <code>TIME_ON</code> is the usual way to put a log that came
+out of several sessions back into the order it happened.</p>
+
+<h3>Selecting and deleting QSOs</h3>
+
+<p>Click a row to select it; shift-click to extend the selection, or command-click to add
+one row at a time. <kbd>⌘A</kbd> selects everything.</p>
+
+<figure>
+    <img src="images/04-sorted.png" alt="The log sorted by callsign with eight rows selected">
+    <figcaption><b>Figure 3.</b> Sorted on <code>CALL</code> — note the sort arrow in the
+    header — with a contiguous block of QSOs selected. Sorting first is what makes a
+    single drag enough.</figcaption>
+</figure>
+
+<p>The <kbd>Delete</kbd> key removes the selected QSOs, and so does
+<strong>Edit ▸ Delete</strong>. Both are undoable. Trimming a log down to the contacts
+that were part of one activation is normal preparation for an upload, and it is the
+reason the output filename can take the earliest date in the file without having to guess
+anything: you have already removed the QSOs that do not belong.</p>
+
+<h3>Cut, copy and paste move whole QSOs</h3>
+
+<p>Selection in the grid is whole rows, so <kbd>⌘X</kbd>, <kbd>⌘C</kbd> and
+<kbd>⌘V</kbd> operate on whole QSOs rather than on a rectangle of cells. Pasted QSOs land
+below the selection, or at the end if nothing is selected — so pasting one log into
+another appends it.</p>
+
+<p>What goes on the clipboard is ADIF text. QSOs copied here paste into another log, or
+into a text editor, and come back in as themselves.</p>
+
+<div class="note heads-up">
+    <span class="label">While a cell is open for editing</span>
+    <p>Cut, copy and paste apply to the <em>text</em> you are editing, which is what you
+    would expect from any text field. They only move QSOs when the grid itself has
+    focus.</p>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">6</span>Finding</h2>
+
+<p><kbd>⌘F</kbd> opens the find bar. Type, and the grid moves its selection to the first
+QSO containing what you typed. <kbd>⌘G</kbd> steps to the next match and
+<kbd>⇧⌘G</kbd> to the previous, wrapping around the ends; the arrows beside the field do
+the same. <kbd>Escape</kbd> or <strong>Done</strong> closes it.</p>
+
+<figure>
+    <img src="images/05-find.png" alt="The find bar showing one of two matches">
+    <figcaption><b>Figure 4.</b> The find bar, with the match count beside the field.
+    Find moves the selection; it never hides a row and never changes the log.</figcaption>
+</figure>
+
+<p>Every column is searched at once. A callsign, a park reference, a grid square and a
+comment are all just text you half-remember, and having to say which column it lives in
+before you can look for it is a question you should not have to answer. The match is
+case- and accent-insensitive. Field <em>names</em> are not searched — typing
+<code>CALL</code> finds the QSO whose comment mentions a call, not every QSO in the
+log.</p>
+
+<div class="note heads-up">
+    <span class="label">To act on a group of QSOs, sort — do not search</span>
+    <p>Find moves to one QSO at a time, so it cannot help you delete every contact
+    someone else made from your callsign. Sorting can: click the
+    <code>OPERATOR</code> column header and the QSOs that are not yours become one
+    contiguous block, which you can select in a single drag and delete in one keystroke.
+    The same trick works for a band, a mode, or a date. This is deliberately the only
+    mechanism — a filter that hides rows was built, tried, and removed as far more
+    machinery than the job needs.</p>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">7</span>Duplicates</h2>
+
+<p><strong>Edit ▸ Find Duplicates…</strong>, <kbd>⌘D</kbd>, or the
+<strong>Dedupe</strong> toolbar button. A log that has been exported twice, or that has
+had a session appended to it by hand, ends up with the same QSO in it more than once.
+POTA will reject the repeat, and it is easier to remove it here.</p>
+
+<p>The first sheet asks what "the same" means for this log. The fields ticked by default
+are <code>QSO_DATE</code>, <code>CALL</code>, <code>BAND</code> and <code>MODE</code> —
+what an activator almost always means by a duplicate — and only fields the file actually
+carries are offered.</p>
+
+<figure class="narrow">
+    <img src="images/06-dedupe-fields.png" alt="The sheet asking which fields make two QSOs the same">
+    <figcaption><b>Figure 5.</b> Choosing what counts as a duplicate. Only fields this log actually carries are offered, so the list is different for a file from a different logger.</figcaption>
+</figure>
+
+<p>The second sheet is the point of the whole command: <strong>every QSO that would be
+deleted is listed before any of them is</strong>, one line each, showing the row number,
+the values that matched, and the row it duplicates.</p>
+
+<pre>#12  W1ABC · 20260209 · 20m · FT8   — same as #3</pre>
+
+<figure class="narrow">
+    <img src="images/07-dedupe-review.png" alt="The sheet listing the duplicate QSOs found">
+    <figcaption><b>Figure 6.</b> Nothing has been deleted at this point. Both repeats are named, with the QSO each one duplicates, and either can be unticked and kept.</figcaption>
+</figure>
+
+<p>They arrive all ticked, because agreeing with the whole list is the common case.
+Untick anything you would rather keep. The first QSO of each matching set is never
+offered for deletion — only the repeats. <strong>Delete</strong> removes what is still
+ticked, in one undoable step, and nothing reaches the file on disk until you save.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">8</span>Filling from QRZ</h2>
+
+<p><strong>Edit ▸ Fill from QRZ…</strong>, <kbd>⌘L</kbd>, or the <strong>QRZ</strong>
+toolbar button. It fills in the station details you would otherwise type by hand: name,
+town, state, county, grid square, country, DXCC, and CQ and ITU zones.</p>
+
+<p>This is the only feature that uses the network, and it needs a <strong>QRZ XML
+subscription</strong> — the lookup is QRZ's service, billed by them, not something this
+app provides.</p>
+
+<h3>Credentials</h3>
+
+<p>Enter your QRZ username and password once, in <strong>ADIF Editor ▸ Settings…</strong>
+(<kbd>⌘,</kbd>).</p>
+
+<figure class="narrow">
+    <img src="images/16-settings.png" alt="The Settings window with the QRZ credential fields">
+    <figcaption><b>Figure 7.</b> Settings, in its entirety. The password goes to the Keychain; the username is an ordinary preference. <b>Remove</b> takes the app offline again.</figcaption>
+</figure>
+
+<div class="note promise">
+    <span class="label">Where the password goes</span>
+    <p>Into your Keychain, and nowhere else — never a preferences file, never a log,
+    never the app's own storage. <strong>Remove</strong> deletes it, and the app is
+    offline again the moment it is gone: with no credentials stored it does not so much
+    as attempt a connection. One callsign at a time goes out. Your log never
+    does.</p>
+</div>
+
+<h3>Running a lookup</h3>
+
+<p>Select the QSOs you want filled, or select nothing to cover the whole log — the
+confirmation sheet says which of those it is about to do, and how many callsigns that
+means, because looking up four hundred QSOs when you meant four is the kind of surprise
+that costs an API quota.</p>
+
+<figure class="narrow">
+    <img src="images/13-qrz-confirm.png" alt="The sheet confirming a QRZ lookup of five callsigns">
+    <figcaption><b>Figure 8.</b> Five QSOs were selected, so five callsigns are looked up — with nothing selected the sheet would say so and cover the whole log. The ticked fields are remembered.</figcaption>
+</figure>
+
+<p>Tick the fields you want filled. The choice is remembered for next time. A progress
+sheet counts through the callsigns while it runs and can be cancelled part way; what has
+already been fetched is still offered.</p>
+
+<p>Then, as with duplicates, every proposed change is shown before any of it is applied,
+one line per cell:</p>
+
+<pre>#12  W1ABC   GRIDSQUARE → FN32aa</pre>
+
+<p>Untick anything you disagree with, and <strong>Fill</strong> applies the rest as a
+single undoable edit.</p>
+
+<p>Callsigns QRZ has no record of are named in the review sheet rather than passed over
+in silence, as is any error that stopped the batch early. Two fields QRZ returns are
+deliberately not offered: latitude and longitude, because the grid square already carries
+the position at the precision a log needs, and the street address, because a home address
+is not log data and should not end up in a file you upload.</p>
+
+<div class="note promise">
+    <span class="label">Empty cells only</span>
+    <p>The lookup never overwrites a value that is already there. If you have typed a
+    name or corrected a grid square, QRZ's version of it is not offered and cannot
+    replace yours. Corrections are yours to make by hand — the app fills blanks and
+    creates columns, and does not second-guess data you entered.</p>
+</div>
+
+
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">9</span>The POTA command</h2>
+
+<p><strong>POTA ▸ Stamp Park Reference…</strong>, <kbd>⌘P</kbd>, or the
+<strong>POTA</strong> toolbar button. This is the reason the app exists.</p>
+
+<p>Type one park reference and you get a file stamped with it. Type several, separated
+by commas, and you get one file per park — each holding <em>every</em> QSO, because being
+inside three parks at once means each contact counts for all three. It is the same
+command either way; the number of references you type is what decides.</p>
+
+<figure class="narrow">
+    <img src="images/08-pota-parks.png" alt="The sheet asking for one or more park references">
+    <figcaption><b>Figure 9.</b> One reference or several, separated by commas. This is the only place the two cases differ.</figcaption>
+</figure>
+
+<p>References are validated leniently: anything shaped unlike <code>US-1234</code> gets a
+question rather than a refusal, because park numbering is not this app's business to be
+certain about.</p>
+
+<p>Next you choose a destination folder, and then confirm the filenames. They are
+proposed in POTA's convention:</p>
+
+<pre>WW8L@US-1234 20260209.adi</pre>
+
+<table>
+    <thead><tr><th>Part</th><th>Where it comes from</th></tr></thead>
+    <tbody>
+        <tr><td class="key"><code>WW8L</code></td>
+            <td><code>STATION_CALLSIGN</code>, falling back to <code>OPERATOR</code> —
+                and a portable callsign's <code>/</code> becomes a <code>-</code>, since
+                a slash is a path separator</td></tr>
+        <tr><td class="key"><code>US-1234</code></td>
+            <td>the park reference you typed</td></tr>
+        <tr><td class="key"><code>20260209</code></td>
+            <td>the earliest <code>QSO_DATE</code> in the log — which is why trimming
+                the log first matters</td></tr>
+    </tbody>
+</table>
+
+<figure class="narrow">
+    <img src="images/10-pota-filenames.png" alt="The sheet confirming the filename before writing">
+    <figcaption><b>Figure 10.</b> The proposed name, editable before anything is written, and the destination named in the question.</figcaption>
+</figure>
+
+<p>Every name is editable before anything is written. If the log carries no callsign at
+all, the name is proposed without one and the sheet says so, rather than putting a second
+question in front of you. If a name would collide with a file already in that folder, you
+are asked before it is replaced; if it would collide with the log you have open, or with
+another of the files about to be written, the app refuses outright and sends you back to
+the names.</p>
+
+<figure class="narrow">
+    <img src="images/11-pota-nfer.png" alt="The same sheet proposing three filenames for a three-park activation">
+    <figcaption><b>Figure 11.</b> A three-park n-fer: three files, each holding every QSO, differing only in the park reference.</figcaption>
+</figure>
+
+<div class="note promise">
+    <span class="label">The log you opened is never touched</span>
+    <p>Every one of these outputs is a new file. The log that came off the radio is not
+    modified, not rewritten, and not even marked as changed — whatever you do here, it is
+    still on disk exactly as it was. That is why one park and ten take the identical
+    path.</p>
+</div>
+
+<h3>QSOs that already have a park reference</h3>
+
+<p>If some QSOs already carry <code>MY_SIG_INFO</code>, you are asked once whether to
+replace those values in the output or keep them.</p>
+
+<figure class="narrow">
+    <img src="images/12-existing-refs.png" alt="The prompt about QSOs that already carry a park reference">
+    <figcaption><b>Figure 12.</b> Asked only when there is something to overwrite — and the log you have open is not changed whichever you pick.</figcaption>
+</figure>
+
+<p>Empty cells are filled without comment; existing values are never replaced silently.
+This is the one place in the app where an automated command writes over a value you might
+have put there, and it is permitted only because the outputs are new files and it always
+asks first.</p>
+
+<h3>MY_SIG</h3>
+
+<p>Settings has one POTA option: whether to also write <code>MY_SIG</code> =
+<code>POTA</code> alongside the reference. It is off by default. POTA does not require it
+— <code>MY_SIG_INFO</code> is what the upload reads.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">10</span>Saving, and what is guaranteed</h2>
+
+<p><kbd>⌘S</kbd> saves in place; <strong>File ▸ Save As…</strong> writes elsewhere;
+<strong>Revert to Saved</strong> throws away everything since the last save. There is no
+autosave, and nothing in the app writes to the file you opened except Save. Closing a
+window with unsaved edits asks first.</p>
+
+<h3>Byte-for-byte</h3>
+
+<p>Open a file and save it without editing anything, and what lands on disk is identical
+to what came in — the same bytes, not merely the same fields. That covers things a log
+editor could reasonably be expected to tidy up and deliberately does not: the byte-order
+mark if there was one, CRLF line endings if the file used them, a missing header, the
+casing of every field name as it was spelled, zero-length fields, ADIF type indicators,
+and the order fields appear in within each QSO.</p>
+
+<p>Fields the app has never heard of are covered by the same rule, because nothing it
+does not understand is ever rewritten. A logger's private <code>APP_*</code> extensions
+and <code>USERDEF</code> definitions come back out exactly as they went in.</p>
+
+<div class="note heads-up">
+    <span class="label">The one exception</span>
+    <p>A field whose declared length is wrong is written back <em>correct</em>. Copying
+    the wrong number out again would be preserving corruption rather than preserving
+    data. Every such case is reported in the banner, so a file that changes on save
+    always told you why first.</p>
+</div>
+
+<h3>What the banner is telling you</h3>
+
+<figure>
+    <img src="images/02-banner.png" alt="A log open with a warning banner under the title bar">
+    <figcaption><b>Figure 13.</b> The banner names the first problem and the byte it was
+    found at, and counts the rest. It is advisory — the file opened, the QSOs are all
+    there, and nothing is waiting on you.</figcaption>
+</figure>
+
+<table>
+    <thead><tr><th>What it says</th><th>What happened</th></tr></thead>
+    <tbody>
+        <tr><td>declared a length of <em>n</em> but held <em>m</em> characters</td>
+            <td>The field's length was wrong. The value was recovered by reading up to
+                the next field, and will be written back with a corrected length.</td></tr>
+        <tr><td>matched only when read as bytes rather than characters</td>
+            <td>The logger counted bytes where ADIF counts characters — normal when a
+                value holds accented characters or an emoji. The value is intact.</td></tr>
+        <tr><td>which is not a number</td>
+            <td>The length was not numeric at all. The field was kept and its value
+                recovered.</td></tr>
+        <tr><td>Unexpected text between fields</td>
+            <td>Something that belongs to no field — a stray separator, a note someone
+                typed in. It is left exactly where it was.</td></tr>
+        <tr><td>characters could not be read as ADIF and were skipped</td>
+            <td>A run the parser could not make sense of. It resynchronized at the next
+                well-formed tag rather than giving up on the file.</td></tr>
+        <tr><td>ends before the last QSO's &lt;EOR&gt;</td>
+            <td>A truncated file — an interrupted download or copy. The final QSO is kept
+                with the fields it had, rather than discarded.</td></tr>
+        <tr><td>carries <em>field</em> twice</td>
+            <td>One QSO has the same field twice. Both are kept and both will be written
+                back, but the grid shows and edits only the first — so clearing that cell
+                reveals the second rather than emptying it.</td></tr>
+    </tbody>
+</table>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">11</span>Keyboard shortcuts</h2>
+
+<table>
+    <thead><tr><th>Key</th><th>Does</th></tr></thead>
+    <tbody>
+        <tr><td class="key"><kbd>⌘O</kbd></td><td>Open a log</td></tr>
+        <tr><td class="key"><kbd>⌘S</kbd></td><td>Save</td></tr>
+        <tr><td class="key"><kbd>⇧⌘S</kbd></td><td>Save As…</td></tr>
+        <tr><td class="key"><kbd>⌘W</kbd></td><td>Close the window</td></tr>
+        <tr><td class="key"><kbd>⌘Z</kbd></td><td>Undo</td></tr>
+        <tr><td class="key"><kbd>⇧⌘Z</kbd></td><td>Redo</td></tr>
+        <tr><td class="key"><kbd>⌘X</kbd> <kbd>⌘C</kbd> <kbd>⌘V</kbd></td>
+            <td>Cut, copy and paste whole QSOs — or text, while editing a cell</td></tr>
+        <tr><td class="key"><kbd>⌘A</kbd></td><td>Select every QSO</td></tr>
+        <tr><td class="key"><kbd>Delete</kbd></td><td>Delete the selected QSOs</td></tr>
+        <tr><td class="key"><kbd>⌘⌫</kbd></td>
+            <td>Delete the selected QSOs, from the Edit menu</td></tr>
+        <tr><td class="key"><kbd>⌘F</kbd></td><td>Find</td></tr>
+        <tr><td class="key"><kbd>⌘G</kbd> / <kbd>⇧⌘G</kbd></td>
+            <td>Find next / previous</td></tr>
+        <tr><td class="key"><kbd>⌘D</kbd></td><td>Find duplicates</td></tr>
+        <tr><td class="key"><kbd>⌘L</kbd></td><td>Fill from QRZ</td></tr>
+        <tr><td class="key"><kbd>⌘P</kbd></td><td>Stamp a park reference</td></tr>
+        <tr><td class="key"><kbd>⌘,</kbd></td><td>Settings</td></tr>
+        <tr><td class="key"><kbd>Return</kbd> / <kbd>Tab</kbd></td>
+            <td>Commit the cell you are editing</td></tr>
+        <tr><td class="key"><kbd>Escape</kbd></td>
+            <td>Abandon the cell you are editing, or close the find bar</td></tr>
+    </tbody>
+</table>
+
+<div class="note heads-up">
+    <span class="label">Why Delete is on ⌘⌫ in the menu</span>
+    <p>A bare <kbd>⌫</kbd> as a menu shortcut would be caught by the app before it ever
+    reached a cell you were editing, and backspace would stop deleting characters. So the
+    menu item carries <kbd>⌘⌫</kbd>, while the bare <kbd>Delete</kbd> key still deletes
+    QSOs whenever the grid itself has focus — which is the only time it could mean
+    that.</p>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">12</span>When something looks wrong</h2>
+
+<div class="qa">
+<h3>macOS says the app is damaged, or from an unidentified developer</h3>
+<p>Expected on first launch: the app is not notarized. Section&nbsp;2 has the three ways
+past it. Nothing is wrong with the download.</p>
+</div>
+
+<div class="qa">
+<h3>My log is a <code>.txt</code> file</h3>
+<p>Open it anyway. FT8CN and others write ADIF content under whatever extension they
+like, and the app judges by content. There is no need to rename anything.</p>
+</div>
+
+<div class="qa">
+<h3>The QRZ lookup filled nothing</h3>
+<p>Most often because there was nothing to fill: the lookup only writes into empty cells,
+so a log that already has names and grid squares has nothing for it to do — and the sheet
+says exactly that. Otherwise, check that the fields you wanted are ticked, that the QSOs
+you meant are selected, and that Settings shows credentials as stored. QRZ having no
+record of a callsign is reported by name.</p>
+</div>
+
+<div class="qa">
+<h3>A QSO will not vanish when I clear its cell</h3>
+<p>If the banner mentioned a field appearing twice in one QSO, the grid is showing the
+first of the two. Clearing it reveals the second rather than emptying the cell. Both are
+in the file and both are preserved.</p>
+</div>
+
+<div class="qa">
+<h3>The window opened tiny, or in the wrong place</h3>
+<p>Windows remember the size and position you last used, shared across logs. If a
+remembered size no longer fits — a display that changed, or an external monitor that is
+no longer attached — the app notices and sizes the window to the log instead. Resize it
+once and the new size is what the next log gets.</p>
+</div>
+
+<div class="qa">
+<h3>The file will not open at all</h3>
+<p>The only fatal problem is a file that is not valid UTF-8. The message names the byte
+offset of the first bad sequence. That usually means a genuinely corrupt file or one in
+some older single-byte encoding; converting it with <code>iconv</code> and opening the
+result is the way through.</p>
+</div>
+
+<div class="qa">
+<h3>I sorted the log and now the file is in a different order</h3>
+<p>Sorting is a view, but it is the view that gets written. <kbd>⌘Z</kbd> undoes a sort
+like anything else, and reverting or reopening without saving leaves the file
+untouched.</p>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section class="chapter">
+<h2><span class="num">13</span>Licence</h2>
+
+<p>ADIF Editor is free software under the <strong>GNU General Public License, version 3
+or later</strong>. You may use, study, modify and share it freely. If you distribute a
+modified version you have to make your source available under the same terms, so that it
+stays open for whoever comes after you.</p>
+
+<p>As with any licence of this kind, the program comes with <strong>no warranty of any
+kind</strong>, to the extent permitted by law; you use it at your own risk. The exact
+terms are in sections 15 to 17 of the licence, which ships with the source.</p>
+
+<p>This is a clean-room implementation written against the public ADIF specification at
+<a href="https://adif.org">adif.org</a>. It is not derived from, affiliated with, or
+endorsed by any other ADIF editing tool.</p>
+
+<p class="colophon">
+    ADIF Editor {{VERSION}} &middot; Copyright © 2026 Tim Annable, WW8L &middot;
+    GPL-3.0-or-later<br>
+    This manual was generated from <code>docs/manual/manual.html</code> on {{DATE}}.
+    Screenshots are of {{VERSION}} running on macOS.
+</p>
+</section>

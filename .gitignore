@@ -9,5 +9,10 @@ build/
 dist/
 *.app
 
+# The built manual. docs/manual/ is the source — the HTML, the stylesheet and the
+# screenshots — and Scripts/manual.sh regenerates the PDF from it in a few seconds, the
+# same reason bundle.sh generates AppIcon.icns rather than committing one.
+docs/ADIF-Editor-Manual.pdf
+
 # Private working notes — the candid half of CLAUDE.md, deliberately not published.
 CLAUDE.local.md

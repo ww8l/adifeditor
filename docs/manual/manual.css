@@ -1,0 +1,269 @@
+/* ADIF Editor manual — print styles.
+ *
+ * Rendered to PDF by Scripts/manual.sh through headless Chrome, so this is written for
+ * paper first: a Letter page, a serif body, and figures that are not allowed to break
+ * across a page boundary. It reads acceptably in a browser too, which is how it is
+ * usually checked.
+ *
+ * The palette is the app icon's, so the manual looks like the thing it documents.
+ */
+
+:root {
+    --navy:  #1F3A5F;
+    --cream: #F5F3EC;
+    --amber: #D97706;
+    --slate: #6E819A;
+    --ink:   #23272E;
+    --rule:  #D6DBE2;
+}
+
+@page {
+    size: Letter;
+    margin: 20mm 18mm;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Headings ------------------------------------------------------------ */
+
+h1, h2, h3, .cover-title, .toc h2 {
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    color: var(--navy);
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+h2 {
+    font-size: 16pt;
+    margin: 0 0 14pt;
+    padding-bottom: 5pt;
+    border-bottom: 1.5pt solid var(--navy);
+    break-after: avoid;
+}
+
+h2 .num {
+    color: var(--amber);
+    font-variant-numeric: tabular-nums;
+    margin-right: 8pt;
+}
+
+h3 {
+    font-size: 11.5pt;
+    margin: 18pt 0 6pt;
+    break-after: avoid;
+}
+
+/* Every numbered section starts a page. The cover and contents handle their own
+ * breaks, so this rule is scoped to the sections themselves. */
+section.chapter { break-before: page; }
+section.chapter:first-of-type { break-before: auto; }
+
+p { margin: 0 0 9pt; orphans: 3; widows: 3; }
+
+ul, ol { margin: 0 0 9pt; padding-left: 18pt; }
+li { margin-bottom: 4pt; }
+
+strong { font-weight: 700; color: #14181F; }
+
+a { color: var(--navy); text-decoration: none; border-bottom: 0.5pt solid var(--slate); }
+
+code, kbd, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9pt;
+}
+
+code {
+    background: var(--cream);
+    padding: 0.5pt 3pt;
+    border-radius: 3px;
+}
+
+kbd {
+    display: inline-block;
+    background: #fff;
+    border: 0.75pt solid var(--rule);
+    border-bottom-width: 1.5pt;
+    border-radius: 4px;
+    padding: 0 4pt;
+    font-size: 8.5pt;
+    white-space: nowrap;
+}
+
+pre {
+    background: var(--cream);
+    border-left: 2.5pt solid var(--slate);
+    padding: 8pt 10pt;
+    margin: 0 0 10pt;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    overflow-x: auto;
+    break-inside: avoid;
+}
+
+/* ---- Cover --------------------------------------------------------------- */
+
+.cover {
+    break-after: page;
+    height: 227mm;              /* the page box, less its margins */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+}
+
+.cover img { width: 108pt; height: 108pt; margin: 0 auto 22pt; }
+
+.cover-title { font-size: 30pt; letter-spacing: -0.4pt; margin: 0 0 8pt; }
+
+.cover-sub {
+    font-size: 12.5pt;
+    color: var(--slate);
+    margin: 0 auto 28pt;
+    max-width: 340pt;
+    line-height: 1.5;
+}
+
+.cover-rule { width: 44pt; height: 2.5pt; background: var(--amber); margin: 0 auto 26pt; }
+
+.cover-meta {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9pt;
+    color: var(--slate);
+    line-height: 1.9;
+}
+
+/* ---- Contents ------------------------------------------------------------ */
+
+.toc { break-after: page; }
+.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+
+.toc li {
+    counter-increment: toc;
+    padding: 5pt 0;
+    border-bottom: 0.5pt solid var(--rule);
+    display: flex;
+    gap: 10pt;
+    align-items: baseline;
+}
+
+.toc li::before {
+    content: counter(toc);
+    color: var(--amber);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9pt;
+    min-width: 16pt;
+}
+
+.toc .what { color: var(--slate); font-size: 9.5pt; }
+
+/* ---- Figures ------------------------------------------------------------- */
+
+figure {
+    margin: 14pt 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+figure img {
+    display: block;
+    width: 100%;
+    border: 0.75pt solid var(--rule);
+    border-radius: 5px;
+}
+
+figcaption {
+    margin-top: 6pt;
+    font-size: 8.5pt;
+    color: var(--slate);
+    line-height: 1.45;
+}
+
+figcaption b {
+    color: var(--navy);
+    font-weight: 600;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+}
+
+/* A shot of a sheet is mostly window; showing it at full width wastes a page. */
+figure.narrow img { width: 78%; margin: 0 auto; }
+
+/* ---- Callouts ------------------------------------------------------------ */
+
+.note {
+    break-inside: avoid;
+    padding: 9pt 12pt;
+    margin: 12pt 0;
+    border-radius: 4px;
+    font-size: 10pt;
+    line-height: 1.5;
+}
+
+.note p:last-child { margin-bottom: 0; }
+
+.note .label {
+    display: block;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.6pt;
+    text-transform: uppercase;
+    margin-bottom: 3pt;
+}
+
+/* What the app promises. */
+.note.promise { background: var(--cream); border-left: 2.5pt solid var(--amber); }
+.note.promise .label { color: var(--amber); }
+
+/* What will surprise you. */
+.note.heads-up { background: #EEF2F7; border-left: 2.5pt solid var(--navy); }
+.note.heads-up .label { color: var(--navy); }
+
+/* ---- Tables -------------------------------------------------------------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 0 0 12pt;
+}
+
+th {
+    text-align: left;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: var(--navy);
+    border-bottom: 1pt solid var(--navy);
+    padding: 4pt 6pt;
+}
+
+td { padding: 4pt 6pt; border-bottom: 0.5pt solid var(--rule); vertical-align: top; }
+tbody tr:nth-child(even) { background: #FAFAF7; }
+td.key { white-space: nowrap; width: 96pt; }
+
+/* Question-and-answer pairs in the troubleshooting section. */
+.qa { break-inside: avoid; margin-bottom: 14pt; }
+.qa h3 { margin-top: 0; }
+
+.colophon {
+    margin-top: 22pt;
+    padding-top: 10pt;
+    border-top: 0.5pt solid var(--rule);
+    font-size: 8.5pt;
+    color: var(--slate);
+}
+
+@media screen {
+    body { max-width: 660pt; margin: 0 auto; padding: 28pt; background: #fff; }
+}
