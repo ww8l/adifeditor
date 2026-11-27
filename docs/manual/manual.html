@@ -32,8 +32,8 @@
         <li><span>Installing</span> <span class="what">including the first-launch warning</span></li>
         <li><span>Opening a log</span> <span class="what">any file, whatever its extension</span></li>
         <li><span>The window</span> <span class="what">grid, columns, toolbar</span></li>
-        <li><span>Editing</span> <span class="what">cells, sorting, selecting, moving QSOs</span></li>
-        <li><span>Finding</span> <span class="what">and the trick that replaces filtering</span></li>
+        <li><span>Editing</span> <span class="what">cells, sorting, QSOs, deleting a column</span></li>
+        <li><span>Finding and replacing</span> <span class="what">and the trick that replaces filtering</span></li>
         <li><span>Duplicates</span> <span class="what">found, shown, then removed</span></li>
         <li><span>Filling from QRZ</span> <span class="what">the one thing that uses the network</span></li>
         <li><span>The POTA command</span> <span class="what">one park or ten</span></li>
@@ -247,11 +247,22 @@ into a text editor, and come back in as themselves.</p>
     would expect from any text field. They only move QSOs when the grid itself has
     focus.</p>
 </div>
+
+<h3>Deleting a column</h3>
+
+<p>Right-click a column header and choose <strong>Delete Column</strong>. The field is
+removed from every QSO in the log, including QSOs where it was present but empty, and the
+column leaves the grid. It does not ask first: like deleting QSOs, it is undoable, and
+<kbd>⌘Z</kbd> puts the column back exactly where it was.</p>
+
+<p>Clearing every cell in a column by hand is not the same thing. The column stays on
+screen for as long as the window is open, in case you are about to type a value back
+into it; only Delete Column takes it away.</p>
 </section>
 
 <!-- ===================================================================== -->
 <section class="chapter">
-<h2><span class="num">6</span>Finding</h2>
+<h2><span class="num">6</span>Finding and replacing</h2>
 
 <p><kbd>⌘F</kbd> opens the find bar. Type, and the grid moves its selection to the first
 QSO containing what you typed. <kbd>⌘G</kbd> steps to the next match and
@@ -261,7 +272,8 @@ the same. <kbd>Escape</kbd> or <strong>Done</strong> closes it.</p>
 <figure>
     <img src="images/05-find.png" alt="The find bar showing one of two matches">
     <figcaption><b>Figure 4.</b> The find bar, with the match count beside the field.
-    Find moves the selection; it never hides a row and never changes the log.</figcaption>
+    Find moves the selection; it never hides a row, and on its own it never changes the
+    log.</figcaption>
 </figure>
 
 <p>Every column is searched at once. A callsign, a park reference, a grid square and a
@@ -270,6 +282,32 @@ before you can look for it is a question you should not have to answer. The matc
 case- and accent-insensitive. Field <em>names</em> are not searched — typing
 <code>CALL</code> finds the QSO whose comment mentions a call, not every QSO in the
 log.</p>
+
+<h3>Replacing</h3>
+
+<p><kbd>⌥⌘F</kbd>, or <strong>Edit ▸ Find and Replace</strong>, opens the same bar with
+the cursor in the <strong>Replace with</strong> field. Type what you are looking for in
+the find field and what should go in its place in the replace field, then:</p>
+
+<ul>
+    <li><strong>Replace</strong> changes the selected QSOs and steps to the next match.
+    Pressing <kbd>Return</kbd> in the replace field does the same. Because find has
+    already selected the match, this is one QSO at a time — check each one, replace it or
+    step past it with <kbd>⌘G</kbd>. Select several QSOs first, or all of them with
+    <kbd>⌘A</kbd>, and one press replaces in every one.</li>
+    <li><strong>All</strong> replaces in every QSO that matches, and says how many
+    changed.</li>
+</ul>
+
+<p>Replace finds text exactly the way find does — in any column, ignoring case and
+accents, never in field names — so what it changes is what find showed you. Only the
+text that matched is changed; everything else in the QSO is written back exactly as it
+was. Leave the replace field empty and the matched text is deleted; if that leaves a
+value with nothing in it, the field is removed from the QSO, just as clearing the cell by
+hand would.</p>
+
+<p>Each press of Replace, and each All, is a single edit: one <kbd>⌘Z</kbd> undoes the
+lot.</p>
 
 <div class="note heads-up">
     <span class="label">To act on a group of QSOs, sort — do not search</span>
@@ -567,6 +605,7 @@ and <code>USERDEF</code> definitions come back out exactly as they went in.</p>
         <tr><td class="key"><kbd>⌘⌫</kbd></td>
             <td>Delete the selected QSOs, from the Edit menu</td></tr>
         <tr><td class="key"><kbd>⌘F</kbd></td><td>Find</td></tr>
+        <tr><td class="key"><kbd>⌥⌘F</kbd></td><td>Find and replace</td></tr>
         <tr><td class="key"><kbd>⌘G</kbd> / <kbd>⇧⌘G</kbd></td>
             <td>Find next / previous</td></tr>
         <tr><td class="key"><kbd>⌘D</kbd></td><td>Find duplicates</td></tr>
@@ -574,7 +613,7 @@ and <code>USERDEF</code> definitions come back out exactly as they went in.</p>
         <tr><td class="key"><kbd>⌘P</kbd></td><td>Stamp a park reference</td></tr>
         <tr><td class="key"><kbd>⌘,</kbd></td><td>Settings</td></tr>
         <tr><td class="key"><kbd>Return</kbd> / <kbd>Tab</kbd></td>
-            <td>Commit the cell you are editing</td></tr>
+            <td>Commit the cell you are editing; in the replace field, Replace</td></tr>
         <tr><td class="key"><kbd>Escape</kbd></td>
             <td>Abandon the cell you are editing, or close the find bar</td></tr>
     </tbody>

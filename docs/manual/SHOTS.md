@@ -57,7 +57,7 @@ files.
 | `02-banner.png` | `recovered.adi` | Just open it — the banner appears by itself. |
 | `03-editing.png` | FT8CN | Click the `GRIDSQUARE` cell on row 3 twice to open it for editing, capture the window, then crop to the detail (1200×400 px around the cell, including the column headers). Full width is far too small to see an open cell. |
 | `04-sorted.png` | FT8CN | Click the `CALL` header to sort, then select rows 5–12. |
-| `05-find.png` | FT8CN | ⌘F, type `KN6KI` — two matches, so the bar reads "1 of 2". |
+| `05-find.png` | FT8CN | ⌥⌘F, type `KN6KI` in the find field — two matches, so the bar reads "1 of 2" — and leave the replace field empty so its placeholder shows. **Stale since 2026-11-27:** the shot in the repo predates the replace field and button pair added for issue #41, and needs retaking with this recipe. |
 | `06-dedupe-fields.png` | `session-with-repeats.adi` | Edit ▸ Find Duplicates… |
 | `07-dedupe-review.png` | `session-with-repeats.adi` | …then **Find Duplicates**. Two repeats, which is what the manual quotes. |
 | `08-pota-parks.png` | FT8CN | POTA ▸ Stamp Park Reference…, type `US-1234`. |

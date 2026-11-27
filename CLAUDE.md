@@ -36,14 +36,15 @@ already set here; a fresh clone needs `git config core.hooksPath .githooks`.
 
 ## Where things stand
 
-*Last updated 2026-08-18.*
+*Last updated 2026-11-27.*
 
 **M1 is complete, the owner has used it, and it has now shipped.** The QRZ lookup (§10.4)
 landed after M1, on the owner's request, and is the reason this app can reach the network
 at all. **The live QRZ lookup has run against the real service, on the owner's
 subscription, and worked** (2026-08-15) — the fake-transport-only caveat that stood here
-is retired. Find (⌘F) followed. 237 tests, all green and all mutation-checked rather than
-merely observed passing.
+is retired. Find (⌘F) followed, then find-and-replace and delete column (issue #41,
+2026-11-27). 247 tests, all green and all mutation-checked rather than merely observed
+passing.
 
 **`v26.8.16` is built, verified and sitting as a draft release** (2026-08-16). Universal,
 icon, signed, 879K `.dmg`, produced by GitHub Actions rather than by hand. It was
@@ -69,7 +70,7 @@ Scripts/           test.sh (the suite), ci-local.sh (the pre-push gate),
                    bundle.sh (builds, icons and signs ADIF Editor.app)
 .github/workflows/ ci.yml (dormant — PR and manual only), release.yml (tags and manual)
 .githooks/         pre-push — runs ci-local.sh, skips tags and branch deletions
-Tests/             ADIFKitTests (round trip, parser, editing, duplicates, find),
+Tests/             ADIFKitTests (round trip, parser, editing, duplicates, find, replace),
                    POTAKitTests, QRZKitTests (responses, session, lookup, batch)
 fixtures/real/     FT8CN6469053684847039306.txt — the owner's log, 66 QSOs, unmodified
 fixtures/synthetic/ 24 hand-built cases; see fixtures/README.md for what each one tests
@@ -101,10 +102,15 @@ socket. Nothing in `Tests/QRZKitTests` opens a connection, and nothing there ref
 **Beyond the spec, then folded in:** dedupe (toolbar and Edit ▸ Find Duplicates) is still
 not in DESIGN.md — the owner asked for it after using M1. Closest to §10.3's validation
 panel in spirit, but it deletes rather than advises, so it shows every row before removing
-any. The QRZ lookup *was* written into DESIGN.md as §10.4 when it was built.
+any. The QRZ lookup *was* written into DESIGN.md as §10.4 when it was built. **Delete
+column** (header right-click, issue #41) is not in DESIGN.md either; it removes every copy
+of a field from every QSO, asks nothing because it is undoable, and undo restores the
+column's position because `LogDocument.columnOrder` is snapshotted with the records. The
+grid's columns follow that order, so it is the one place a column can leave it.
 
 §12's GitHub Actions pipeline and the app icon — both M4 — landed on 2026-08-16. Still not
-built: no replace, no save-selection-as-new-file (M2/M3). **Column filters are not
+built: no save-selection-as-new-file (M2). M3's replace landed 2026-11-27 as part of the
+find bar (Replace on the selection, All on every match). **Column filters are not
 coming** — see decision 18.
 
 **The icon** is the owner's design, authored in Claude Desktop and handed over as an SVG,
@@ -152,6 +158,20 @@ it does for a real app icon rather than a generic fallback.
   exist under Xcode. Nobody had ever run it on such a machine. It would have failed the
   first CI run on its first step. Assume the same of anything else here whose only
   evidence is that it reads correctly.
+- **A failed test build can still print a passing suite.** The CLT for Swift 6.4
+  (installed 2026-11-23) ships the `TestingMacros` plugin in
+  `usr/lib/swift/host/plugins/testing/`, which SwiftPM does not search, so every test
+  target failed to compile. `swift test` then ran the binaries an earlier build had left
+  in `.build` and printed all 237 tests passing against stale code, exit status 1. Judge
+  the suite by its exit status, never by the log. `Scripts/test.sh` now passes
+  `-plugin-path` when that directory exists. A toolchain update is a reason to run the
+  suite from clean before trusting it.
+- **`NSTableView.clickedColumn` is never set for a header click.** It stays -1, so a
+  header context menu cannot ask the table which column it is for. `GridViewController`
+  installs its own `NSTableHeaderView` subclass that records the column in
+  `menu(for:)`. Shipped broken once (greyed out on every column) because the headless
+  harness tested the action rather than the click; the harness now synthesizes the
+  right-click event.
 - **Actions bills in quota-minutes, and the multiplier is the whole story.** Wall clock
   times a runner multiplier: Linux 1x, Windows 2x, **macOS 10x**. Private repos get
   2,000/month; public repos are unmetered on every platform, which is why going public
@@ -225,9 +245,9 @@ it does for a real app icon rather than a generic fallback.
   narrowed. The nineteen decisions below still live only in this file,
   and five of them (2, 14, 15, 16, 18) contradict what §9, §10.1 and §10.2 say in plain
   words — a reader of DESIGN.md alone would build the wrong app, and decision 18 now means
-  they would build a whole feature that was rejected. It also does not mention dedupe or
-  find.
-- **README is current as of 2026-08-15** and is the one document safe to hand a stranger.
+  they would build a whole feature that was rejected. It also does not mention dedupe,
+  find or delete column.
+- **README is current as of 2026-11-27** and is the one document safe to hand a stranger.
   Install section written, feature list matches what exists, and the byte-identity
   guarantee is stated with its one exception. Its first-launch instructions are correct
   for macOS 15+, which the release notes initially were not. It had claimed "no network
@@ -239,7 +259,8 @@ it does for a real app icon rather than a generic fallback.
 **Where to pick up (2026-08-18).** A five-agent code review ran on 2026-08-17 and filed
 issues #1–#40. **All forty are closed**, two of them without a code change: #7 was not a
 bug, and #27's suggested fix measured slower than the code it replaced, so it got a
-different one. The backlog is empty. Working tree clean, `main` tracking `origin/main`.
+different one. #41, the owner's own request for replace and delete column, was worked on
+2026-11-27 and closes when its commit is pushed. The backlog is otherwise empty.
 Session-by-session detail lives in `CLAUDE.local.md` rather than here.
 
 The app layer has no test suite (§11 exempts it), so the fixes that landed there were
@@ -257,7 +278,10 @@ The open build choices, roughly in order of how much they are worth:
 - **The DESIGN.md fold-in.** The most valuable thing outstanding, and it grows more
   expensive each session: decision 18 means DESIGN.md describes a feature that was built
   and rejected, and §12 describes a pipeline whose triggers decision 19 narrowed.
-- **Save selection as a new file** — the last of M2 — and **M3's replace**.
+- **Save selection as a new file** — the last of M2.
+- **Retake the manual's find-bar screenshot** (`docs/manual/images/05-find.png`). It
+  predates the replace field; `docs/manual/SHOTS.md` has the recipe. Needs a person at
+  the keyboard, or Accessibility access for the terminal, which was gone by 2026-11-27.
 - **Bump `actions/checkout` and `actions/upload-artifact` to `@v5`.** Both target Node 20,
   which GitHub has deprecated; runs are being forced onto Node 24 and warn each time.
   Nothing is broken.

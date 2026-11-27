@@ -29,7 +29,9 @@ Around that it does the editing a log actually needs:
 - **Find duplicates.** QSOs that repeat, every one shown before any is removed.
 - **Fill from QRZ.** Name, location and zone fields for callsigns you would otherwise
   type by hand. Empty cells only — it never overwrites something you entered.
-- **Find (⌘F).** Across every column at once.
+- **Find and replace (⌘F, ⌥⌘F).** Across every column at once. Replace acts on the
+  selected QSOs or on every match, as one undoable edit.
+- **Delete a column.** Right-click its header. Undoable, and undo puts it back in place.
 
 And underneath all of it, the guarantee the parser is built around: **a file opened and
 saved without edits is byte-identical to the one that came in.** Not merely
