@@ -26,6 +26,18 @@ if [ ! -d "$FRAMEWORKS/Testing.framework" ]; then
     exec swift test "$@"
 fi
 
+# The compiler plugin behind #expect and @Test. CLT for Swift 6.4 (installed 2026-11-23)
+# ships it in a `testing/` subdirectory that SwiftPM does not search, and every test
+# target then fails to compile with "plugin for module 'TestingMacros' not found". The
+# failure is easy to misread: `swift test` still runs the test binaries an earlier build
+# left behind, so the log is full of passing tests while the exit status is 1. The CLT
+# this script was written against found the plugin unaided, so the flag is added only
+# when the directory exists.
+PLUGINS="$DEVELOPER_DIR/usr/lib/swift/host/plugins/testing"
+if [ -d "$PLUGINS" ]; then
+    set -- -Xswiftc -plugin-path -Xswiftc "$PLUGINS" "$@"
+fi
+
 exec swift test \
     -Xswiftc -F -Xswiftc "$FRAMEWORKS" \
     -Xlinker -F -Xlinker "$FRAMEWORKS" \
