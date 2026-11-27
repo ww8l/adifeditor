@@ -57,7 +57,7 @@ files.
 | `02-banner.png` | `recovered.adi` | Just open it — the banner appears by itself. |
 | `03-editing.png` | FT8CN | Click the `GRIDSQUARE` cell on row 3 twice to open it for editing, capture the window, then crop to the detail (1200×400 px around the cell, including the column headers). Full width is far too small to see an open cell. |
 | `04-sorted.png` | FT8CN | Click the `CALL` header to sort, then select rows 5–12. |
-| `05-find.png` | FT8CN | ⌥⌘F, type `KN6KI` in the find field — two matches, so the bar reads "1 of 2" — and leave the replace field empty so its placeholder shows. **Stale since 2026-11-27:** the shot in the repo predates the replace field and button pair added for issue #41, and needs retaking with this recipe. |
+| `05-find.png` | FT8CN | Sort on `CALL`, ⌘F, type `KN6KI` — two matches, so the bar reads "1 of 2" — and leave the replace field empty so its placeholder shows. **Rendered rather than captured** (2026-11-27, for issue #41's replace field); see "When neither permission is available" below. |
 | `06-dedupe-fields.png` | `session-with-repeats.adi` | Edit ▸ Find Duplicates… |
 | `07-dedupe-review.png` | `session-with-repeats.adi` | …then **Find Duplicates**. Two repeats, which is what the manual quotes. |
 | `08-pota-parks.png` | FT8CN | POTA ▸ Stamp Park Reference…, type `US-1234`. |
@@ -99,6 +99,37 @@ Two more traps if the run is scripted:
   click-to-edit path depends on mouse-up timing and click count that a synthesized
   accessibility click does not carry. Post real `CGEvent`s instead, or set the selection
   through accessibility (`set selected of row N`, then shift-arrow keys).
+
+## When neither permission is available
+
+On 2026-11-27 this machine had neither Accessibility nor Screen Recording permission
+for the terminal (`osascript is not allowed assistive access`; ScreenCaptureKit failed
+with `-3801`, "declined TCCs"), so the app could be neither driven nor captured.
+`05-find.png` was made another way, and it is the one figure here that is not a capture
+of the running app:
+
+- A `swiftc` program compiled across every app source but `main.swift`, linked against
+  `-emit-library` builds of the three kits — the same harness the app layer's fixes are
+  proved with. It opens the log with `LogDocument(contentsOf:ofType:)`, calls
+  `makeWindowControllers()` and `showWindow`, sets the frame to 1000×520 at (200, 200),
+  sets `NSApp.appearance` to aqua, and activates so the window is key. The window,
+  toolbar and find bar are the shipping code, on screen.
+- The state is set in code: `sortRecords(byColumn: "CALL", ascending: true)`,
+  `showFind(nil)`, then `insertText("KN6KI")` into the search field's editor and its
+  action sent.
+- The image is AppKit drawing the window's frame view into a bitmap
+  (`bitmapImageRepForCachingDisplay` / `cacheDisplay` on `contentView.superview`),
+  which needs no permission. At 2× that is 2000×1040; downscale as below.
+- **The column header is translucent**, blurring the rows scrolled beneath it, and a
+  bitmap render has no blur — the rows show through as ghost text. The program puts an
+  opaque `controlBackgroundColor` view behind the header for the render, which is how the
+  blur over white rows reads on screen anyway.
+- Two visible differences from a capture: no document icon beside the title, and no
+  scroll bar (overlay scrollers are hidden at rest). Neither is something the manual
+  points at.
+
+Prefer a real capture whenever the permissions are back. This is the fallback, not the
+method.
 
 ## Afterwards
 

@@ -279,9 +279,6 @@ The open build choices, roughly in order of how much they are worth:
   expensive each session: decision 18 means DESIGN.md describes a feature that was built
   and rejected, and §12 describes a pipeline whose triggers decision 19 narrowed.
 - **Save selection as a new file** — the last of M2.
-- **Retake the manual's find-bar screenshot** (`docs/manual/images/05-find.png`). It
-  predates the replace field; `docs/manual/SHOTS.md` has the recipe. Needs a person at
-  the keyboard, or Accessibility access for the terminal, which was gone by 2026-11-27.
 - **Bump `actions/checkout` and `actions/upload-artifact` to `@v5`.** Both target Node 20,
   which GitHub has deprecated; runs are being forced onto Node 24 and warn each time.
   Nothing is broken.
