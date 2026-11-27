@@ -140,3 +140,21 @@ extension ADIFDocument {
         return key
     }
 }
+
+extension ADIFDocument {
+
+    /// The records with one column removed from every QSO.
+    ///
+    /// Removes every occurrence of the field, whatever its spelling: a zero-length
+    /// `<COMMENT:0>` is still the column, and so is a second copy in a record that carries
+    /// the field twice. Leaving either behind would mean the column vanished from the grid
+    /// and came back on the next open. Every other field keeps its bytes.
+    public func recordsByDeletingColumn(_ column: String) -> [ADIFRecord] {
+        let key = ADIFField.normalize(column)
+        return records.map { record in
+            var record = record
+            record.fields.removeAll { $0.name == key }
+            return record
+        }
+    }
+}

@@ -187,6 +187,13 @@ final class LogDocument: NSDocument {
         log.records[index] = record
         sortedBy = newSort
 
+        // A QRZ fill or a retyped cell can bring a field the order has not seen, and the
+        // grid takes its columns from `columnOrder`, so the order has to know first.
+        // Checked against this one record before paying for a walk of the whole log.
+        if record.fields.contains(where: { !columnOrder.contains($0.name) }) {
+            rememberColumns()
+        }
+
         NotificationCenter.default.post(
             name: Self.recordsDidChange,
             object: self,
@@ -241,23 +248,69 @@ final class LogDocument: NSDocument {
     /// `sortedBy` is the order the new list is in, and it is snapshotted and restored
     /// alongside the records for the same reason they are: it is part of what the change
     /// changed, so undo has to put it back too. Callers that break the order pass `nil`.
+    ///
+    /// `columnOrder` is snapshotted too. It only ever grows, except when a column is
+    /// deleted, and undoing that has to put the column back where it was rather than
+    /// wherever the merged order of the restored records happens to place it. Callers
+    /// that do not delete a column leave `newOrder` out, and the order then only learns
+    /// whatever fields the new records bring.
     func replaceAllRecords(_ records: [ADIFRecord],
                            actionName: String,
-                           sortedBy newSort: Sort?) {
+                           sortedBy newSort: Sort?,
+                           columnOrder newOrder: [String]? = nil) {
         let previous = log.records
         let previousSort = sortedBy
-        guard previous != records else { return }
+        let previousOrder = columnOrder
+        // A column every value of which was already cleared is in the grid but in no
+        // record, so deleting it changes the order and nothing else — still an edit.
+        guard previous != records || (newOrder != nil && newOrder != columnOrder)
+        else { return }
 
         undoManager?.registerUndo(withTarget: self) { document in
             document.replaceAllRecords(previous, actionName: actionName,
-                                       sortedBy: previousSort)
+                                       sortedBy: previousSort,
+                                       columnOrder: previousOrder)
         }
         undoManager?.setActionName(actionName)
 
         log.records = records
         sortedBy = newSort
+        if let newOrder { columnOrder = newOrder }
+        rememberColumns()
 
         NotificationCenter.default.post(name: Self.recordsDidChange, object: self)
+    }
+
+    /// Replaces text in the given rows, as one undoable edit, and says how many QSOs
+    /// changed. What a replace means to the data is ADIFKit's (`recordsByReplacing`).
+    @discardableResult
+    func replace(_ text: String, with replacement: String, inRecordsAt rows: IndexSet) -> Int {
+        let replaced = log.recordsByReplacing(text, with: replacement, inRecordsAt: rows)
+        let changed = zip(log.records, replaced).filter { $0 != $1 }.count
+        guard changed > 0 else { return 0 }
+
+        // The order survives unless the replace touched the column it is sorted on.
+        let stillSorted = sortedBy.map { sort in
+            zip(log.records, replaced).allSatisfy { $0[sort.column] == $1[sort.column] }
+        } ?? false
+
+        replaceAllRecords(replaced,
+                          actionName: "Replace",
+                          sortedBy: stillSorted ? sortedBy : nil)
+        return changed
+    }
+
+    /// Removes a column from every QSO and from the grid. Undoable, and undo puts the
+    /// column back in its place.
+    ///
+    /// The one way a column leaves `columnOrder`: clearing every value in it by hand
+    /// deliberately does not, because the operator may be about to type one back.
+    func deleteColumn(_ column: String) {
+        let key = ADIFField.normalize(column)
+        replaceAllRecords(log.recordsByDeletingColumn(key),
+                          actionName: "Delete Column \(key)",
+                          sortedBy: sortedBy?.column == key ? nil : sortedBy,
+                          columnOrder: columnOrder.filter { $0 != key })
     }
 
     // MARK: - Pending edits

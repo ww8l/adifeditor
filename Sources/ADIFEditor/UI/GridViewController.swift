@@ -56,7 +56,7 @@ final class GridViewController: NSViewController {
 
     init(document: LogDocument) {
         self.document = document
-        self.columns = document.log.columnNames
+        self.columns = document.columnOrder
         super.init(nibName: nil, bundle: nil)
 
         NotificationCenter.default.addObserver(
@@ -75,7 +75,7 @@ final class GridViewController: NSViewController {
     /// Undo has to repaint the grid just as an edit does, and routing both through the
     /// document's notification is what stops that from being two code paths.
     @objc private func recordsDidChange(_ notification: Notification) {
-        addAnyNewColumns()
+        syncColumns()
         showSortIndicator()
 
         // A row that no longer holds the text is no longer a match, and the row indices
@@ -112,31 +112,42 @@ final class GridViewController: NSViewController {
         tableView.sortDescriptors = wanted
     }
 
-    /// Adds columns for field names the log has gained — pasted QSOs carrying a field
-    /// nothing else in the file had. Without this their values would be in the document
-    /// and saved to the file while being invisible in the grid.
+    /// Brings the grid's columns into line with the document's `columnOrder`.
     ///
-    /// Only ever adds. A column whose every value has been deleted stays on screen for
-    /// the rest of the session: having a column vanish because the last QSO using it was
-    /// deleted would be a second surprise on top of the deletion, and the user may well
-    /// be about to type a value back into it.
-    private func addAnyNewColumns() {
-        guard let document else { return }
+    /// Pasted QSOs and QRZ fills can bring a field nothing else in the file had; without
+    /// a column their values would be saved to the file while invisible here. They are
+    /// placed where the order puts them rather than appended, so the grid shows the same
+    /// order a re-added field is written in.
+    ///
+    /// A column leaves only when it is deleted. One whose every value has been cleared
+    /// stays — the document keeps it in the order for exactly that reason — since having
+    /// it vanish would be a second surprise on top of the edit, and the operator may be
+    /// about to type a value back. Undoing a delete restores the order, and the column
+    /// returns to its old place.
+    private func syncColumns() {
+        guard let document, document.columnOrder != columns else { return }
+        let wanted = document.columnOrder
 
-        let newNames = document.log.columnNames.filter { !columns.contains($0) }
-        guard !newNames.isEmpty else { return }
-
-        for name in newNames {
-            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
-            column.title = name
-            column.width = width(forColumnNamed: name)
-            column.minWidth = 40
-            column.resizingMask = .userResizingMask
-            column.sortDescriptorPrototype = NSSortDescriptor(key: name, ascending: true)
-            tableView.addTableColumn(column)
+        for column in tableView.tableColumns
+        where column.identifier != Self.rowNumberColumn
+            && !wanted.contains(column.identifier.rawValue) {
+            tableView.removeTableColumn(column)
         }
 
-        columns.append(contentsOf: newNames)
+        // Position 0 is the row-number column.
+        for (offset, name) in wanted.enumerated() {
+            let target = offset + 1
+            let identifier = NSUserInterfaceItemIdentifier(name)
+            let current = tableView.column(withIdentifier: identifier)
+            if current < 0 {
+                tableView.addTableColumn(makeColumn(named: name))
+                tableView.moveColumn(tableView.numberOfColumns - 1, toColumn: target)
+            } else if current != target {
+                tableView.moveColumn(current, toColumn: target)
+            }
+        }
+
+        columns = wanted
     }
 
     // MARK: - View
@@ -233,6 +244,43 @@ final class GridViewController: NSViewController {
         findBar.onNext = { [weak self] in self?.step { $0.next(after: $1) } }
         findBar.onPrevious = { [weak self] in self?.step { $0.previous(before: $1) } }
         findBar.onClose = { [weak self] in self?.closeFind() }
+        findBar.onReplace = { [weak self] in self?.replaceInSelection() }
+        findBar.onReplaceAll = { [weak self] in self?.replaceAll() }
+    }
+
+    /// ⌥⌘F. The find bar, with the keyboard in the replace field.
+    @objc func showReplace(_ sender: Any?) {
+        findBar.isHidden = false
+        findBar.takeReplaceFocus()
+    }
+
+    /// Replaces in the selected QSOs and moves on to the next match — the step a find
+    /// already took is what chose the row, so Replace acts on what the operator is
+    /// looking at. ⌘A first makes it a replace over the whole selection.
+    private func replaceInSelection() {
+        let text = findBar.searchText
+        let selection = tableView.selectedRowIndexes
+        guard !text.isEmpty, let document, commitPendingEdit() else { return }
+
+        // When nothing selected matched — most likely nothing was selected — this
+        // replaces nothing, and the step puts the selection on a match, so a second press
+        // does what was meant.
+        document.replace(text, with: findBar.replacementText, inRecordsAt: selection)
+        step { $0.next(after: $1) }
+    }
+
+    /// Replaces in every QSO that matches, as one undoable edit.
+    private func replaceAll() {
+        let text = findBar.searchText
+        guard !text.isEmpty, let document, commitPendingEdit() else { return }
+
+        findMatches(for: text)
+        let changed = document.replace(text, with: findBar.replacementText,
+                                       inRecordsAt: IndexSet(matches.rows))
+
+        findMatches(for: text)
+        findBar.showStatus(position: nil, of: matches.count)
+        findBar.showMessage(changed == 1 ? "Replaced in 1 QSO" : "Replaced in \(changed) QSOs")
     }
 
     /// ⌘F. Opens the bar if it is closed and focuses it either way, so a second ⌘F is a
@@ -324,6 +372,13 @@ final class GridViewController: NSViewController {
         tableView.allowsColumnReordering = false
 
         tableView.menu = rowMenu
+        // A header view of our own, because it is the only thing that knows which header
+        // was right-clicked: `NSTableView.clickedColumn` is set by clicks in the rows and
+        // stays -1 for the header, which left Delete Column greyed out on every column.
+        let header = ColumnHeaderView(frame: tableView.headerView?.frame
+                                          ?? NSRect(x: 0, y: 0, width: 0, height: 28))
+        header.menu = headerMenu
+        tableView.headerView = header
     }
 
     // MARK: - Context menu
@@ -357,6 +412,35 @@ final class GridViewController: NSViewController {
         return menu
     }()
 
+    /// Right-click on a column header. One item, because deleting is the one thing a
+    /// column can have done to it that a cell cannot.
+    lazy var headerMenu: NSMenu = {
+        let menu = NSMenu()
+        menu.delegate = self
+        menu.autoenablesItems = false
+
+        let delete = NSMenuItem(title: "Delete Column",
+                                action: #selector(deleteClickedColumn(_:)),
+                                keyEquivalent: "")
+        delete.target = self
+        menu.addItem(delete)
+        return menu
+    }()
+
+    /// The column the header menu will act on, captured for the same reason as
+    /// `contextRows`: `clickedColumn` means nothing by the time the action fires.
+    private(set) var contextColumn: String?
+
+    /// Removes the column from every QSO. Undoable, so it asks nothing — the same footing
+    /// as deleting rows.
+    @objc private func deleteClickedColumn(_ sender: Any?) {
+        guard let contextColumn else { return }
+        // An edit still open in this column would otherwise commit into a field the
+        // column no longer has, after the column is gone.
+        guard commitPendingEdit() else { return }
+        document?.deleteColumn(contextColumn)
+    }
+
     /// The rows the context menu will act on, captured while the menu is being built.
     ///
     /// Captured rather than read at click time because `clickedRow` is only meaningful
@@ -379,18 +463,21 @@ final class GridViewController: NSViewController {
         tableView.addTableColumn(rowNumbers)
 
         for name in columns {
-            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
-            column.title = name
-            column.width = width(forColumnNamed: name)
-            column.minWidth = 40
-            column.resizingMask = .userResizingMask
-
-            // Clicking the header sorts (§10.1). The row-number column deliberately gets
-            // no prototype — it numbers positions, so sorting by it is meaningless.
-            column.sortDescriptorPrototype = NSSortDescriptor(key: name, ascending: true)
-
-            tableView.addTableColumn(column)
+            tableView.addTableColumn(makeColumn(named: name))
         }
+    }
+
+    private func makeColumn(named name: String) -> NSTableColumn {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(name))
+        column.title = name
+        column.width = width(forColumnNamed: name)
+        column.minWidth = 40
+        column.resizingMask = .userResizingMask
+
+        // Clicking the header sorts (§10.1). The row-number column deliberately gets
+        // no prototype — it numbers positions, so sorting by it is meaningless.
+        column.sortDescriptorPrototype = NSSortDescriptor(key: name, ascending: true)
+        return column
     }
 
     /// Sizes a column to its widest cell, sampling rather than measuring every row: a
@@ -448,6 +535,19 @@ extension GridViewController: NSTableViewDataSource {
 extension GridViewController: NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === headerMenu {
+            let index = (tableView.headerView as? ColumnHeaderView)?.menuColumn ?? -1
+            let column = index >= 0 && index < tableView.numberOfColumns
+                ? tableView.tableColumns[index].identifier : nil
+            contextColumn = column == Self.rowNumberColumn ? nil : column?.rawValue
+
+            for item in menu.items {
+                item.isEnabled = contextColumn != nil
+                item.title = contextColumn.map { "Delete Column \($0)" } ?? "Delete Column"
+            }
+            return
+        }
+
         let clicked = tableView.clickedRow
         let selection = tableView.selectedRowIndexes
 
@@ -640,5 +740,17 @@ extension GridViewController: NSTableViewDelegate {
         ])
 
         return cell
+    }
+}
+
+/// Records which column a header right-click landed on, for the header menu to act on.
+private final class ColumnHeaderView: NSTableHeaderView {
+
+    /// The column under the most recent right-click, or -1 when it missed every column.
+    private(set) var menuColumn = -1
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        menuColumn = column(at: convert(event.locationInWindow, from: nil))
+        return super.menu(for: event)
     }
 }

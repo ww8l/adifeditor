@@ -73,6 +73,8 @@ enum MainMenu {
             item("Delete", #selector(GridViewController.delete(_:)), "\u{8}"),
             .separator(),
             item("Find", #selector(GridViewController.showFind(_:)), "f"),
+            item("Find and Replace", #selector(GridViewController.showReplace(_:)), "f",
+                 modifiers: [.command, .option]),
             item("Find Next", #selector(GridViewController.findNext(_:)), "g"),
             item("Find Previous", #selector(GridViewController.findPrevious(_:)), "G"),
             .separator(),

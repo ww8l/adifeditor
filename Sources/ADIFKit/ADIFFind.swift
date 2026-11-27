@@ -68,3 +68,48 @@ extension ADIFDocument {
         })
     }
 }
+
+extension ADIFDocument {
+
+    /// The records with `text` replaced by `replacement` in the given rows.
+    ///
+    /// Matches exactly as `find` does — any field, case- and diacritic-insensitively, by
+    /// value and never by field name — so what Replace changes is what Find showed. The
+    /// replacement itself is written as typed.
+    ///
+    /// Confined to the rows asked for. Replace acts on the selection, which is the
+    /// operator saying which QSOs they mean; Replace All is the same call with every
+    /// match. Nothing here decides on its own that a row should change (§6.3).
+    ///
+    /// Only the values that actually change are touched: every other field keeps its
+    /// spelling, LENGTH and separator, so a replace leaves the rest of the record
+    /// byte-identical (§6.2a). A value replaced down to nothing removes the field, the
+    /// same as clearing the cell by hand (decision 2).
+    public func recordsByReplacing(_ text: String,
+                                   with replacement: String,
+                                   inRecordsAt indexes: IndexSet) -> [ADIFRecord] {
+        guard !text.isEmpty else { return records }
+
+        var result = records
+        for index in indexes where result.indices.contains(index) {
+            var fields: [ADIFField] = []
+            fields.reserveCapacity(result[index].fields.count)
+
+            for var field in result[index].fields {
+                let replaced = field.value.replacingOccurrences(
+                    of: text, with: replacement,
+                    options: [.caseInsensitive, .diacriticInsensitive])
+
+                if replaced == field.value {
+                    fields.append(field)
+                } else if !replaced.isEmpty {
+                    field.value = replaced
+                    fields.append(field)
+                }
+                // Replaced to empty: the field is dropped.
+            }
+            result[index].fields = fields
+        }
+        return result
+    }
+}
