@@ -253,8 +253,9 @@ it does for a real app icon rather than a generic fallback.
   for macOS 15+, which the release notes initially were not. It had claimed "no network
   connections of any kind" for a day after QRZ landed — worth re-reading it whenever a
   capability changes, since it is the file that goes public first and the easiest one to
-  forget. Its "no release has been published yet" line is **still accurate** — `v26.8.16`
-  is a draft, and a draft is not published. Revisit that sentence when one is, not before.
+  forget. Releases are published now (`v26.11.27` is Latest, 2026-11-27), and its status
+  line says so — it had still read "pre-release, under construction" after two releases
+  were out.
 
 **Where to pick up (2026-08-18).** A five-agent code review ran on 2026-08-17 and filed
 issues #1–#40. **All forty are closed**, two of them without a code change: #7 was not a

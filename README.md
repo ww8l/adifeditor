@@ -3,9 +3,9 @@
 A native macOS editor for amateur radio ADIF log files, with purpose-built tools for
 Parks on the Air (POTA) activation logs.
 
-**Status: pre-release, under construction.** See [DESIGN.md](DESIGN.md) for the full
-specification and [CLAUDE.md](CLAUDE.md) for the invariants the implementation is held
-to.
+**Status: released, in use, and still being built.** Download it from the
+[Releases](../../releases) page. See [DESIGN.md](DESIGN.md) for the full specification
+and [CLAUDE.md](CLAUDE.md) for the invariants the implementation is held to.
 
 ## What it's for
 
